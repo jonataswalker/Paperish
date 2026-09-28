@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { pathToFileURL } from 'node:url'
 import type { ProjectState } from '../shared/types'
 import { CACHE_DIR } from './config'
+import { frameworkShims } from './framework-shims'
 import { readAliases } from './project'
 
 // The component host is a Vite dev server rooted in the linked project, using
@@ -60,9 +61,14 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
   const state = getState()
   const extraPlugins: unknown[] = []
   const alias: { find: RegExp; replacement: string }[] = []
+  let define: Record<string, string> | undefined
 
   // Without a Vite config (Next.js, CRA…) bring our own framework plugins.
   if (!configFile) {
+    const shims = frameworkShims(vite, root)
+    extraPlugins.push(...shims.plugins)
+    define = shims.define
+
     if (state.frameworks.includes('react'))
       extraPlugins.push((await import('@vitejs/plugin-react')).default())
 
@@ -134,6 +140,7 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
     // SAFETY: plugin-react/plugin-vue instances are valid Vite plugins.
     plugins: [hostPlugin, ...(extraPlugins as never[])],
     resolve: alias.length ? { alias } : undefined,
+    define,
     server: { host: '127.0.0.1', port: HOST_BASE_PORT, strictPort: false, open: false, cors: true },
     optimizeDeps: {
       entries: state.components.map((c) => c.file),
@@ -328,6 +335,20 @@ class PwBoundary extends React.Component {
   componentDidCatch(error) { post({ type: 'pw:error', message: String(error && error.message || error) }); }
   render() { return this.state.error ? null : this.props.children; }
 }
+const asyncWrapped = new WeakMap();
+const serverish = (C) => {
+  if (!C || C.constructor?.name !== 'AsyncFunction') return C;
+  if (!asyncWrapped.has(C)) asyncWrapped.set(C, function PwAsync(p) {
+    const [el, setEl] = React.useState(null);
+    React.useEffect(() => {
+      let live = true;
+      Promise.resolve(C(p)).then((v) => live && setEl(v), (err) => post({ type: 'pw:error', message: String(err && err.message || err) }));
+      return () => { live = false; };
+    }, []);
+    return el;
+  });
+  return asyncWrapped.get(C);
+};
 let reactRoot = null;
 const reactProps = (p, key) => {
   const o = { key };
@@ -335,14 +356,14 @@ const reactProps = (p, key) => {
   return o;
 };
 const toReact = (nodes, comps) => nodes.map((n, i) => n.t === 'text' ? n.v
-  : React.createElement(n.t === 'el' ? n.tag : (comps[n.ref] || 'div'), reactProps(n.props, i), ...toReact(n.children, comps)));
+  : React.createElement(n.t === 'el' ? n.tag : (serverish(comps[n.ref]) || 'div'), reactProps(n.props, i), ...toReact(n.children, comps)));
 function renderReact(Comp, props, tree, comps, done) {
   reactRoot = reactRoot || createRoot(root);
   const kids = tree.length ? toReact(tree, comps) : (props.children != null ? [props.children] : []);
   const { children, ...rest } = props;
   reactRoot.render(React.createElement(PwBoundary, { key: Math.random() },
     React.createElement(function PwDone() { React.useLayoutEffect(() => { done(); }); return null; }),
-    React.createElement(Comp, reactProps(rest, 'c'), ...kids)));
+    React.createElement(serverish(Comp), reactProps(rest, 'c'), ...kids)));
 }
 `
 

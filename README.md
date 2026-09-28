@@ -72,6 +72,7 @@ The app keeps only the list of project folders (and caches) in its data folder: 
 A project with a `package.json` at its root is its own codebase. In a monorepo, an agent can point a file at an app folder with `link_project`. Paperish then:
 - **Discovers components and their props.** React is parsed from TypeScript: interfaces, inline types, shadcn-style `cva` variants, destructuring defaults. Vue comes from `defineProps` (typed, runtime or `withDefaults`).
 - **Runs a component host inside the project** (`src/server/component-host.ts`). It's a Vite dev server using the project's own Vite, config, aliases and Tailwind; without a Vite config it falls back to the React/Vue plugins and tsconfig paths.
+- **Runs Next.js and Create React App components too.** Without a Vite config, `next/*` imports get browser stand-ins (`next/image` renders an `<img>`, `next/link` an `<a>`, `next/font/google` loads the font, router hooks return `/`), async server components are awaited, JSX in `.js` files compiles, and `NEXT_PUBLIC_*` / `REACT_APP_*` come from `.env` (`src/server/framework-shims.ts`). Server-only code (databases, secrets) still can't run in the browser.
 - **Renders each instance live in an isolated iframe** that sizes to its content. Props and children arrive over `postMessage`, HMR keeps instances current as you edit the code, and agent screenshots include them.
 
 Agents use components by name in `write_html`, e.g. `<Button variant="outline">Save</Button>` or `<PricingCard plan="Pro" price={24} highlighted />`. Children can nest other components and HTML. `set_component_props` edits instances, and `get_jsx` emits the real `import` lines.
@@ -197,7 +198,6 @@ The inspector edits common properties, or the node's full CSS directly. It can a
 
 ## Not yet
 
-- Components from Next.js-only APIs (`next/image`, server components) and non-Vite toolchains are best effort
 - Comment UI (the data model and tools exist)
 - Drag-to-reorder inside flex layouts and in the layer tree
 - Snapping and rulers

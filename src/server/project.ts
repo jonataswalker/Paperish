@@ -105,7 +105,7 @@ function watch(rt: Runtime) {
 
   try {
     rt.watcher = fs.watch(rt.state.root, { recursive: true }, (_e, file) => {
-      if (!file || !/\.(tsx|jsx|vue|css)$/.test(file) || SKIP_PATH.test(file)) return
+      if (!file || !/\.(tsx|jsx|js|vue|css)$/.test(file) || SKIP_PATH.test(file)) return
 
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
@@ -197,7 +197,7 @@ function analyze(root: string): Omit<ProjectState, 'status' | 'hostOrigin' | 'er
   const tailwind =
     installedTw ?? (deps.tailwindcss ? deps.tailwindcss.replace(/^[^\d]*/, '') : null)
 
-  const files = listFiles(root)
+  const files = listFiles(root, !!deps['react-scripts'])
 
   const cssEntries = files
     .filter((f) => f.endsWith('.css'))
@@ -211,8 +211,11 @@ function analyze(root: string): Omit<ProjectState, 'status' | 'hostOrigin' | 'er
   const aliases = readAliases(root)
   const components: ComponentInfo[] = []
 
+  // Create React App keeps JSX in .js files.
+  const componentFile = deps['react-scripts'] ? /\.(tsx|jsx|js|vue)$/ : /\.(tsx|jsx|vue)$/
+
   for (const f of files) {
-    if (!/\.(tsx|jsx|vue)$/.test(f) || SKIP_FILE.test(f)) continue
+    if (!componentFile.test(f) || SKIP_FILE.test(f)) continue
     const src = readSmall(path.join(root, f))
 
     if (!src) continue
@@ -283,6 +286,7 @@ const ENTRY_FILES = [
   'src/index.js',
   'src/App.tsx',
   'src/App.jsx',
+  'src/App.js',
   'src/App.vue',
   'app/layout.tsx',
   'app/layout.jsx',
@@ -363,7 +367,8 @@ function cssRank(f: string): number {
   return i < 0 ? 100 + f.split('/').length : i
 }
 
-function listFiles(root: string, max = 3000): string[] {
+function listFiles(root: string, withJs: boolean, max = 3000): string[] {
+  const wanted = withJs ? /\.(tsx|jsx|js|vue|css)$/ : /\.(tsx|jsx|vue|css)$/
   const out: string[] = []
 
   const walk = (dir: string, depth: number) => {
@@ -382,8 +387,7 @@ function listFiles(root: string, max = 3000): string[] {
 
       if (e.isDirectory()) {
         if (!SKIP_DIRS.has(e.name)) walk(full, depth + 1)
-      } else if (/\.(tsx|jsx|vue|css)$/.test(e.name))
-        out.push(path.relative(root, full).split(path.sep).join('/'))
+      } else if (wanted.test(e.name)) out.push(path.relative(root, full).split(path.sep).join('/'))
     }
   }
 
