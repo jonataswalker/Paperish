@@ -33,6 +33,7 @@ export function settingsState(): SettingsState {
 export function updateSettings(patch: { openRouterKey: string }) {
   const next = { ...current }
   const key = String(patch.openRouterKey ?? '').trim()
+
   if (key) next.openRouterKey = key
   else delete next.openRouterKey
   fs.mkdirSync(DATA_DIR, { recursive: true })

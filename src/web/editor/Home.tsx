@@ -32,15 +32,24 @@ function Projects() {
   const connected = useStore((s) => s.connected)
   const repos = projects.filter((p) => !p.scratch)
   const scratch = projects.find((p) => p.scratch)
+
   return (
     <>
       <header className="pw-home-head">
         <h1>Projects</h1>
         <span className="pw-btn-row quiet">
-          <button className="pw-btn" title="Settings (⌘,)" onClick={() => store.setSettingsOpen(true)}>
+          <button
+            className="pw-btn"
+            title="Settings (⌘,)"
+            onClick={() => store.setSettingsOpen(true)}
+          >
             Settings
           </button>
-          <button className="pw-preview-btn pw-home-add" disabled={!connected} onClick={() => store.send({ t: 'addProject' })}>
+          <button
+            className="pw-preview-btn pw-home-add"
+            disabled={!connected}
+            onClick={() => store.send({ t: 'addProject' })}
+          >
             <Icon.Plus /> Add project…
           </button>
         </span>
@@ -51,7 +60,8 @@ function Projects() {
         ))}
         {!repos.length && connected && (
           <p className="pw-home-hint">
-            Add a repo to design in it. Its designs are saved in <code>design/</code> and versioned with the code, and agents working in the repo connect to it on their own.
+            Add a repo to design in it. Its designs are saved in <code>design/</code> and versioned
+            with the code, and agents working in the repo connect to it on their own.
           </p>
         )}
       </div>
@@ -67,13 +77,22 @@ function Projects() {
 function ProjectRow({ project: p }: { project: ProjectInfo }) {
   const [confirming, setConfirming] = useState(false)
   const files = `${p.fileCount} ${p.fileCount === 1 ? 'file' : 'files'}`
+
   return (
-    <div className={`pw-home-row ${p.scratch ? '' : 'removable'}`} onMouseLeave={() => setConfirming(false)}>
-      <button className="pw-home-open" onClick={() => store.send({ t: 'openProject', projectId: p.id })}>
+    <div
+      className={`pw-home-row ${p.scratch ? '' : 'removable'}`}
+      onMouseLeave={() => setConfirming(false)}
+    >
+      <button
+        className="pw-home-open"
+        onClick={() => store.send({ t: 'openProject', projectId: p.id })}
+      >
         <span className="pw-home-icon">{p.scratch ? <Icon.File /> : <Icon.Folder />}</span>
         <span className="pw-home-text">
           <strong>{p.name}</strong>
-          <span className="pw-home-path">{p.scratch ? 'Designs outside any repo' : p.root.replace(/^\/Users\/[^/]+/, '~')}</span>
+          <span className="pw-home-path">
+            {p.scratch ? 'Designs outside any repo' : p.root.replace(/^\/Users\/[^/]+/, '~')}
+          </span>
         </span>
         <span className="pw-home-meta">
           {files}
@@ -82,11 +101,19 @@ function ProjectRow({ project: p }: { project: ProjectInfo }) {
       </button>
       {!p.scratch &&
         (confirming ? (
-          <button className="pw-home-remove confirm" onClick={() => store.send({ t: 'removeProject', projectId: p.id })}>
+          <button
+            className="pw-home-remove confirm"
+            onClick={() => store.send({ t: 'removeProject', projectId: p.id })}
+          >
             Remove
           </button>
         ) : (
-          <button className="pw-home-remove" title="Remove from the list (the repo keeps its files)" aria-label={`Remove ${p.name}`} onClick={() => setConfirming(true)}>
+          <button
+            className="pw-home-remove"
+            title="Remove from the list (the repo keeps its files)"
+            aria-label={`Remove ${p.name}`}
+            onClick={() => setConfirming(true)}
+          >
             <Icon.Close size={13} />
           </button>
         ))}

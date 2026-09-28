@@ -1,6 +1,22 @@
 import { useCallback, useRef, useSyncExternalStore } from 'react'
 import { applyOps } from '../shared/ops'
-import type { CheckoutInfo, ClientMsg, Doc, FileSummary, LintState, Op, PNode, Page, ProjectInfo, ProjectState, ProjectView, RepoState, ServerMsg, SettingsState, TaskState } from '../shared/types'
+import type {
+  CheckoutInfo,
+  ClientMsg,
+  Doc,
+  FileSummary,
+  LintState,
+  Op,
+  PNode,
+  Page,
+  ProjectInfo,
+  ProjectState,
+  ProjectView,
+  RepoState,
+  ServerMsg,
+  SettingsState,
+  TaskState,
+} from '../shared/types'
 
 export interface Camera {
   x: number
@@ -9,10 +25,12 @@ export interface Camera {
 }
 
 type Listener = () => void
+
 export type Tool = 'move' | 'frame' | 'text' | 'hand'
+
 export type PreviewMode = 'fit' | 'actual' | 'responsive'
 
-export interface DevicePrefs {
+interface DevicePrefs {
   /** null = full window width. */
   id: string | null
   /** Index into the device's screens (e.g. folded / open). */
@@ -23,7 +41,9 @@ export interface DevicePrefs {
 }
 
 const params = new URLSearchParams(location.search)
+
 export const ENGINE_MODE = params.get('engine') === '1'
+
 /** Standalone preview tab: ?file=<id>&view=<nodeId>. */
 export const VIEW_NODE = params.get('view')
 
@@ -90,6 +110,7 @@ class Store {
 
   subscribe = (l: Listener) => {
     this.listeners.add(l)
+
     return () => this.listeners.delete(l)
   }
 
@@ -99,6 +120,7 @@ class Store {
 
   subscribeCamera = (l: Listener) => {
     this.cameraListeners.add(l)
+
     return () => {
       this.cameraListeners.delete(l)
     }
@@ -106,10 +128,13 @@ class Store {
 
   subscribeNode(id: string, l: Listener) {
     let set = this.nodeListeners.get(id)
+
     if (!set) this.nodeListeners.set(id, (set = new Set()))
     set.add(l)
+
     return () => {
       set.delete(l)
+
       if (!set.size) this.nodeListeners.delete(id)
     }
   }
@@ -121,8 +146,11 @@ class Store {
   /** Tell node views whose object changed (structural sharing makes this an identity check). */
   private notifyNodes(prev: Record<string, PNode> | undefined) {
     const next = this.doc?.nodes
+
     if (prev === next) return
-    for (const [id, ls] of this.nodeListeners) if (prev?.[id] !== next?.[id]) for (const l of ls) l()
+
+    for (const [id, ls] of this.nodeListeners)
+      if (prev?.[id] !== next?.[id]) for (const l of ls) l()
   }
 
   setEditingText(id: string | null) {
@@ -144,20 +172,34 @@ class Store {
   // ---- connection -------------------------------------------------------------
 
   connect(fileId: string | null) {
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`)
+    const ws = new WebSocket(
+      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
+    )
+
     this.ws = ws
-    ws.onopen = () => {
+    ws.addEventListener('open', () => {
       this.connected = true
-      ws.send(JSON.stringify({ t: 'hello', fileId: fileId ?? this.doc?.id, role: ENGINE_MODE ? 'engine' : 'editor' } satisfies ClientMsg))
+      ws.send(
+        JSON.stringify({
+          t: 'hello',
+          fileId: fileId ?? this.doc?.id,
+          role: ENGINE_MODE ? 'engine' : 'editor',
+        } satisfies ClientMsg),
+      )
+
       for (const m of this.queue.splice(0)) ws.send(JSON.stringify(m))
       this.emit()
-    }
-    ws.onmessage = (e) => this.receive(JSON.parse(e.data) as ServerMsg)
-    ws.onclose = () => {
+    })
+
+    ws.addEventListener('message', (e) => {
+      // SAFETY: server only sends ServerMsg JSON on this socket; parsed at this message boundary.
+      return this.receive(JSON.parse(e.data) as ServerMsg)
+    })
+    ws.addEventListener('close', () => {
       this.connected = false
       this.emit()
       setTimeout(() => this.connect(this.doc?.id ?? (this.home ? null : fileId)), 800)
-    }
+    })
   }
 
   send(msg: ClientMsg) {
@@ -179,6 +221,7 @@ class Store {
 
   private receive(msg: ServerMsg) {
     const prevNodes = this.doc?.nodes
+
     switch (msg.t) {
       case 'doc': {
         const switched = this.doc?.id !== msg.doc.id
@@ -186,13 +229,16 @@ class Store {
         this.doc = msg.doc
         this.version = msg.version
         this.pageId = msg.pageId
+
         if (switched) {
           this.selection = []
           this.hover = null
           this.repo = null
           this.changesOpen = false
           this.setEditingText(null)
+
           this.lint = null
+
           if (!ENGINE_MODE && !VIEW_NODE) {
             history.replaceState(null, '', `?file=${msg.doc.id}`)
             this.restoreCamera()
@@ -200,25 +246,37 @@ class Store {
         } else {
           // Reloaded in place (e.g. its .paperish file changed on disk).
           this.selection = this.selection.filter((id) => msg.doc.nodes[id])
+
           if (this.hover && !msg.doc.nodes[this.hover]) this.hover = null
+
           if (this.editingText && !msg.doc.nodes[this.editingText]) this.setEditingText(null)
         }
+
         this.scheduleLint(0)
         break
       }
+
       case 'ops': {
         if (!this.doc) return
         this.doc = applyOps(this.doc, msg.ops).doc
         this.version = msg.version
+
         if (msg.origin === 'agent') this.lastAgentActivity = Date.now()
+
         this.scheduleLint()
-        if (!this.doc.pages.some((p) => p.id === this.pageId)) this.pageId = this.doc.pages[0]?.id ?? ''
+
+        if (!this.doc.pages.some((p) => p.id === this.pageId))
+          this.pageId = this.doc.pages[0]?.id ?? ''
         this.selection = this.selection.filter((id) => this.doc!.nodes[id])
+
         if (!this.doc.project) this.project = null
+
         if (this.hover && !this.doc.nodes[this.hover]) this.hover = null
+
         if (this.editingText && !this.doc.nodes[this.editingText]) this.setEditingText(null)
         break
       }
+
       case 'working':
         this.working = msg.ids
         break
@@ -235,7 +293,9 @@ class Store {
         this.view = msg.view
         this.checkouts = msg.checkouts
         this.branches = msg.branches
-        if (msg.view.kind === 'checkout' && this.agentElsewhere?.checkout === msg.view.path) this.agentElsewhere = null
+
+        if (msg.view.kind === 'checkout' && this.agentElsewhere?.checkout === msg.view.path)
+          this.agentElsewhere = null
         break
       case 'agentElsewhere':
         this.agentElsewhere = { checkout: msg.checkout, branch: msg.branch }
@@ -261,6 +321,7 @@ class Store {
         this.lint = null
         this.lintOpen = false
         this.setEditingText(null)
+
         if (!ENGINE_MODE && !VIEW_NODE) history.replaceState(null, '', location.pathname)
         break
       case 'page':
@@ -269,6 +330,7 @@ class Store {
           this.selection = []
           this.scheduleLint(0)
         }
+
         break
       case 'reveal':
         queueMicrotask(() => this.onReveal?.(msg.ids))
@@ -285,15 +347,22 @@ class Store {
       case 'task': {
         const t = msg.task
         this.tasks = [...this.tasks.filter((x) => x.id !== t.id), t]
+
         if (t.status !== 'running') {
-          if (t.status === 'done' && t.origin && this.myTokens.has(t.origin) && t.ids?.length) queueMicrotask(() => this.select(t.ids!))
-          setTimeout(() => {
-            this.tasks = this.tasks.filter((x) => x.id !== t.id)
-            this.emit()
-          }, t.status === 'error' ? 8000 : 5000)
+          if (t.status === 'done' && t.origin && this.myTokens.has(t.origin) && t.ids?.length)
+            queueMicrotask(() => this.select(t.ids!))
+          setTimeout(
+            () => {
+              this.tasks = this.tasks.filter((x) => x.id !== t.id)
+              this.emit()
+            },
+            t.status === 'error' ? 8000 : 5000,
+          )
         }
+
         break
       }
+
       case 'error':
         this.error = msg.message
         setTimeout(() => {
@@ -302,6 +371,7 @@ class Store {
         }, 4000)
         break
     }
+
     this.notifyNodes(prevNodes)
     this.flushWaiters()
     this.emit()
@@ -309,6 +379,7 @@ class Store {
 
   waitForVersion(v: number): Promise<void> {
     if (this.version >= v) return Promise.resolve()
+
     return new Promise((resolve) => this.versionWaiters.push({ v, resolve }))
   }
 
@@ -316,8 +387,10 @@ class Store {
     this.versionWaiters = this.versionWaiters.filter((w) => {
       if (this.version >= w.v) {
         w.resolve()
+
         return false
       }
+
       return true
     })
   }
@@ -327,15 +400,19 @@ class Store {
   select(ids: string[]) {
     this.selection = ids
     this.setEditingText(null)
+
     if (this.doc) this.send({ t: 'selection', pageId: this.pageId, ids })
+
     // reveal selection in the layer tree
     for (const id of ids) {
       let cur = this.doc?.nodes[id]?.parent
+
       while (cur) {
         this.expanded.add(cur)
         cur = this.doc?.nodes[cur]?.parent ?? null
       }
     }
+
     this.emit()
   }
 
@@ -348,6 +425,7 @@ class Store {
   /** Applied synchronously (listeners write the DOM), so reads right after see it. */
   setCamera(c: Camera) {
     this.camera = c
+
     for (const l of this.cameraListeners) l()
     this.saveCamera()
   }
@@ -364,17 +442,21 @@ class Store {
 
   setPreviewDevice(patch: Partial<DevicePrefs>) {
     this.previewDevice = { ...this.previewDevice, ...patch }
+
     try {
       localStorage.setItem('paperish:previewDevice', JSON.stringify(this.previewDevice))
     } catch {}
+
     this.emit()
   }
 
   setPreviewMode(mode: PreviewMode) {
     this.previewMode = mode
+
     try {
       localStorage.setItem('paperish:previewMode', mode)
     } catch {}
+
     this.emit()
   }
 
@@ -388,6 +470,7 @@ class Store {
 
   setInspectOpen(open: boolean) {
     this.inspectOpen = open
+
     if (open) this.lintOpen = false
     this.emit()
   }
@@ -403,6 +486,7 @@ class Store {
 
   setLintOpen(open: boolean) {
     this.lintOpen = open
+
     if (open) this.inspectOpen = false
     this.emit()
   }
@@ -457,7 +541,11 @@ class Store {
     clearTimeout(this.cameraTimer)
     this.cameraTimer = window.setTimeout(() => {
       try {
-        if (this.doc) localStorage.setItem(`paperish:camera:${this.doc.id}:${this.pageId}`, JSON.stringify(this.camera))
+        if (this.doc)
+          localStorage.setItem(
+            `paperish:camera:${this.doc.id}:${this.pageId}`,
+            JSON.stringify(this.camera),
+          )
       } catch {}
     }, 300)
   }
@@ -465,6 +553,7 @@ class Store {
   restoreCamera() {
     try {
       const raw = this.doc && localStorage.getItem(`paperish:camera:${this.doc.id}:${this.pageId}`)
+
       if (raw) this.setCamera(JSON.parse(raw))
       else this.needsFit = true
     } catch {
@@ -477,29 +566,49 @@ class Store {
 
 function loadPreviewMode(): PreviewMode {
   const fromUrl = params.get('mode')
+
   if (fromUrl === 'fit' || fromUrl === 'actual' || fromUrl === 'responsive') return fromUrl
+
   try {
     const saved = localStorage.getItem('paperish:previewMode')
+
     if (saved === 'fit' || saved === 'actual' || saved === 'responsive') return saved
   } catch {}
+
   return 'fit'
 }
 
 function loadDevicePrefs(): DevicePrefs {
   let prefs: DevicePrefs = { id: null, screen: 0, chrome: 'app', finish: {} }
+
   try {
     const saved = localStorage.getItem('paperish:previewDevice')
+
     if (saved) prefs = { ...prefs, ...JSON.parse(saved) }
   } catch {}
+
   if (params.has('device')) prefs.id = params.get('device') || null
+
   if (params.has('screen')) prefs.screen = Number(params.get('screen')) || 0
-  if (params.get('chrome') === 'safari' || params.get('chrome') === 'app') prefs.chrome = params.get('chrome') as DevicePrefs['chrome']
+
+  if (params.get('chrome') === 'safari' || params.get('chrome') === 'app') {
+    // SAFETY: checked just above to be 'safari' or 'app', the only DevicePrefs chrome values.
+    prefs.chrome = params.get('chrome') as DevicePrefs['chrome']
+  }
+
   return prefs
 }
 
 export const store = new Store()
+
+declare global {
+  interface Window {
+    __store: Store
+  }
+}
+
 // Exposed for debugging and scripts/perf.ts.
-;(window as unknown as { __store: Store }).__store = store
+window.__store = store
 
 /**
  * Subscribe to a slice of the store. Pass `equal` when the selector builds a
@@ -507,10 +616,13 @@ export const store = new Store()
  */
 export function useStore<T>(selector: (s: Store) => T, equal?: (a: T, b: T) => boolean): T {
   const last = useRef<{ v: T } | null>(null)
+
   return useSyncExternalStore(store.subscribe, () => {
     const next = selector(store)
+
     if (equal && last.current && equal(last.current.v, next)) return last.current.v
     last.current = { v: next }
+
     return next
   })
 }
@@ -527,12 +639,14 @@ export function useCamera<T>(selector: (c: Camera) => T): T {
 /** One node, re-rendering only when that node's object changes. */
 export function useNode(id: string): PNode | undefined {
   const sub = useCallback((l: Listener) => store.subscribeNode(id, l), [id])
+
   return useSyncExternalStore(sub, () => store.doc?.nodes[id])
 }
 
 /** Whether this node's text is being edited, on the same per-node channel. */
 export function useEditingText(id: string): boolean {
   const sub = useCallback((l: Listener) => store.subscribeNode(id, l), [id])
+
   return useSyncExternalStore(sub, () => store.editingText === id)
 }
 
