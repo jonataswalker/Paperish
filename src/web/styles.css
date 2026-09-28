@@ -1590,6 +1590,81 @@ a.pw-path:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pw-label-letter {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.pw-pick {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 24px);
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-radius: 12px;
+  background: var(--solid);
+  box-shadow: var(--float);
+  animation: pw-fade 0.15s var(--ease);
+}
+.pw-pick-question {
+  min-width: 0;
+  margin-right: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-pick-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  flex-shrink: 0;
+  background: var(--hairline-strong);
+}
+.pw-pick-option,
+.pw-pick-none {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition:
+    color 0.15s var(--ease),
+    background 0.15s var(--ease);
+}
+.pw-pick-option:hover,
+.pw-pick-none:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.pw-pick-option kbd {
+  color: var(--text);
+}
+.pw-pick-note {
+  flex-shrink: 0;
+  width: 180px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: rgb(var(--ink) / 0.035);
+}
+.pw-pick-note:focus {
+  background: var(--solid);
+  box-shadow: var(--ring);
+}
 .pw-agent-chip {
   display: inline-flex;
   align-items: center;

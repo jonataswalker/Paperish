@@ -343,6 +343,7 @@ const SHORTCUTS: [string, string][] = [
   ['⌘Z  ⇧⌘Z', 'Undo, redo'],
   ['I', 'Inspect selection'],
   ['L', 'Design issues'],
+  ['A  B  C  D', 'Pick an agent\u2019s option'],
   ['⌘,', 'Settings'],
   ['⇧⌘H  ⇧⌘L', 'Hide, lock'],
   ['P', 'Preview'],

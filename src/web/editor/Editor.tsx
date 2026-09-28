@@ -23,6 +23,7 @@ import { Inspector } from './Inspector'
 import { Palette } from './Palette'
 import { Home } from './Home'
 import { LintCard, SettingsDialog } from './DesignChecks'
+import { PickBar } from './Pick'
 import { ChangesView } from './Repo'
 import { StatusBar } from './StatusBar'
 import { Topbar } from './Topbar'
@@ -48,6 +49,7 @@ export function Editor() {
         </main>
         <Inspector />
         <LintCard />
+        <PickBar />
         <Palette />
         <SettingsDialog />
         <ImportDialog />
@@ -129,6 +131,11 @@ function useShortcuts() {
       if (mod && k === '0') return (handled(), zoomTo(1))
 
       if (mod) return
+
+      const option =
+        !e.shiftKey && store.proposal?.options.find((o) => o.letter.toLowerCase() === k)
+
+      if (option) return (handled(), store.pick(option.nodeId))
 
       if (e.shiftKey && e.code === 'Digit1') return (handled(), zoomToFit())
 

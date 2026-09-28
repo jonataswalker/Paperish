@@ -29,6 +29,7 @@ export function Overlay({
   // Only what the labels show, so edits deep inside artboards don't re-render this.
   const labels = useStore((s) => rootChildren.map((id) => s.doc?.nodes[id]), shallow)
   const agentRecent = useStore((s) => s.lastAgentActivity)
+  const proposal = useStore((s) => s.proposal)
 
   // Hover churns on every mouse move; measure it separately from the stable set.
   const rects = useWorldRects(uniq([...rootChildren, ...selection]))
@@ -59,6 +60,7 @@ export function Overlay({
           if (!r || !n || n.hidden) return null
           const isWorking = working.includes(id)
           const selected = selection.includes(id)
+          const option = proposal?.options.find((o) => o.nodeId === id)
 
           return (
             <div key={id}>
@@ -79,7 +81,8 @@ export function Overlay({
                     Agent
                   </span>
                 )}
-                <span className="pw-label-name">{n.name}</span>
+                {option && <span className="pw-label-letter">{option.letter}</span>}
+                <span className="pw-label-name">{option ? option.label : n.name}</span>
               </div>
             </div>
           )

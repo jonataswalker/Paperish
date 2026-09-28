@@ -99,6 +99,10 @@ Paperish checks designs against the repo's design system, so a team without a de
 - **Do's and Don'ts** are judged by [Jev](https://openrouter.ai/typesafe/jev-1.13), TypeSafe's decision model, through OpenRouter's Decisions API. Add an OpenRouter key in Settings (⌘,) or set `OPENROUTER_API_KEY`; it's kept in the app's data folder, never sent to the editor.
 - **Agents** get the same checks with `lint_design` (`fix: true` applies the fixes), and the guide tells them to run it before finishing.
 
+## Picking between options
+
+Agents don't guess on taste. For a call that's yours to make (layout, density, emphasis, tone), the agent builds 2 to 4 alternatives as artboards and calls `propose_options` with a question. Paperish frames them, labels them A to D, and shows the question in a bar at the bottom: press a letter (or click), optionally with a note, or answer None. `wait_for_pick` returns your answer to the agent; the picked artboard takes the first option's place and the others are removed, in one undo step. The agent guide tells agents to propose this way, and to record choices that settle the design system in DESIGN.md.
+
 ## Designs in your repo
 
 Every file is a `.paperish` file in the project's `design/` folder, e.g. `design/checkout.paperish`:
@@ -132,6 +136,7 @@ Names and argument shapes match Paper's MCP (captured in `reference/paper-tools.
 | Read | `get_basic_info` `get_selection` `get_node_info` `get_children` `get_tree_summary` `get_screenshot` `get_jsx` `get_computed_styles` `get_fill_image` `find_nodes` `get_font_family_info` `get_guide` |
 | Write | `create_artboard` `write_html` `set_text_content` `update_styles` `rename_nodes` `duplicate_nodes` `move_nodes` `delete_nodes` `finish_working_on_nodes` |
 | Tokens | `get_tokens` `create_tokens` `set_tokens` |
+| Pick | `propose_options` `wait_for_pick` |
 | Comments | `list_comment_threads` `get_comment_thread` `list_comment_thread_authors` `set_comment_thread_status` |
 | Export | `export` (png, jpg, webp, pdf, svg via foreignObject) `export_combined_pdf` |
 

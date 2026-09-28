@@ -9,6 +9,7 @@ Core rules:
 - Reuse instead of re-writing: duplicate_nodes + set_text_content/update_styles, or <x-paper-clone node-id="..."/> inside write_html.
 - Call get_font_family_info before your first typography decisions.
 - Working in a git worktree? Designs live in each checkout's design/ folder: open_file the .paperish path under your working directory first, and pass its fileId on every call.
+- Taste calls (layout, density, hierarchy, tone): don't guess and don't ask in chat. Build 2 to 4 alternative artboards, call propose_options, then wait_for_pick.
 - If the repo has a DESIGN.md, follow its tokens and rules, and run lint_design before you finish.
 - When finished, call finish_working_on_nodes. Never show raw node IDs to the user.`
 
@@ -58,7 +59,14 @@ When the user's codebase is linked (link_project, or already linked — see get_
 - move_nodes reorders/reparents while keeping ids.
 - find_nodes locates nodes by text or computed style (e.g. every node using #3B82F6) before bulk edits.
 
-## 6. Review checkpoints (do not skip)
+## 6. Let the user pick
+When a choice is the user's to make (which layout, how dense, what to emphasize, which tone), propose instead of deciding:
+1. Build the alternatives as separate top-level artboards on one page, side by side: duplicate_nodes the artboard, then change only what's being decided in each copy.
+2. propose_options({ question, options: [{ nodeId, label, note? }] }): 2 to 4 options, 1 to 3 word labels, a one-line note on each trade-off.
+3. wait_for_pick({ proposalId }): the user presses A to D (or picks none) and may add a note. The other options are removed for you; continue from the picked one. If it settles a design-system choice, write it into DESIGN.md.
+Things with a right answer (bugs, the spec, DESIGN.md rules) aren't proposals: just do them.
+
+## 7. Review checkpoints (do not skip)
 After each section, screenshot it and check:
 - Spacing: consistent rhythm, nothing cramped or touching edges.
 - Typography: clear hierarchy, readable line length, no orphaned single words in headings.
@@ -68,19 +76,19 @@ After each section, screenshot it and check:
 
 When matching a reference (a live site, a screenshot, or a previous version), use visual_diff: it returns a content-match score, a side-by-side heatmap and the layers under the biggest differences. Fix those layers first, re-run, and stop when the remaining regions are intentional.
 
-## 7. Quality bar
+## 8. Quality bar
 - Prefer restraint: one accent color, generous whitespace, strong type hierarchy.
 - Real, specific placeholder copy — no lorem ipsum. Invent plausible names, numbers and dates.
 - Light mode unless asked otherwise.
 - Small text (≤12px) needs extra contrast and some letter-spacing.
 
-## 8. Typography units
+## 9. Typography units
 font-size in px, line-height in px or unitless, letter-spacing in em.
 
-## 9. Design → code
+## 10. Design → code
 Use get_jsx (tailwind or inline-styles) and get_computed_styles for exact values; don't read measurements off screenshots. Adapt the output to the codebase's conventions and tokens.
 
-## 10. Designs in the repo
+## 11. Designs in the repo
 Every file is a .paperish file in the project's design/ folder (get_basic_info.file.path), inside the user's repository. Edits autosave into it and it's committed like code, so:
 - Before a big change, check what's uncommitted with compare_revision (default: against HEAD).
 - To review your own work, compare_revision against HEAD, or visual_diff with reference.revision for one node.
@@ -89,7 +97,7 @@ Every file is a .paperish file in the project's design/ folder (get_basic_info.f
 
 Git worktrees: each checkout of the repo (the main one and every worktree) has its own design/ folder, so your edits land in the checkout you're working in. If you work in a worktree, start with open_file on the .paperish path under your working directory (or list_files / create_file with cwd), then pass that fileId on every call. Calls without a fileId go to the checkout your MCP client reports; when there are several checkouts and it reports none, they fail and ask for a fileId or cwd.
 
-## 11. Wrap up
+## 12. Wrap up
 Call finish_working_on_nodes when done so the "agent working" indicator clears.`
 
 const MOBILE_STATUS_BAR = `Paste this as the first child of a 390px-wide mobile artboard (write_html insert-children). Change color to #FFFFFF on dark backgrounds.

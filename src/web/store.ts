@@ -10,6 +10,7 @@ import type {
   PNode,
   Page,
   ProjectInfo,
+  Proposal,
   ProjectState,
   ProjectView,
   RepoState,
@@ -95,6 +96,9 @@ class Store {
   lint: LintState | null = null
   lintOpen = false
   private lintTimer = 0
+  /** An agent's options waiting for the user to pick one, and the note to send with the pick. */
+  proposal: Proposal | null = null
+  pickNote = ''
 
   // Three channels so hot paths stay cheap: the camera changes on every wheel
   // event and only a handful of things draw from it; each rendered node only
@@ -238,6 +242,7 @@ class Store {
           this.setEditingText(null)
 
           this.lint = null
+          this.proposal = null
 
           if (!ENGINE_MODE && !VIEW_NODE) {
             history.replaceState(null, '', `?file=${msg.doc.id}`)
@@ -287,6 +292,16 @@ class Store {
       case 'lint':
         if (msg.fileId === this.doc?.id) this.lint = msg.lint
         break
+      case 'proposal': {
+        if (msg.proposal?.id !== this.proposal?.id) this.pickNote = ''
+        this.proposal = msg.proposal
+        const first = msg.proposal && this.doc?.nodes[msg.proposal.options[0].nodeId]
+        const page = first && this.doc?.pages.find((p) => p.rootId === first.parent)
+
+        if (page && page.id !== this.pageId && !ENGINE_MODE) this.setPage(page.id)
+        break
+      }
+
       case 'files':
         this.files = msg.files
         this.projectInfo = msg.project
@@ -320,6 +335,7 @@ class Store {
         this.changesOpen = false
         this.lint = null
         this.lintOpen = false
+        this.proposal = null
         this.setEditingText(null)
 
         if (!ENGINE_MODE && !VIEW_NODE) history.replaceState(null, '', location.pathname)
@@ -477,6 +493,18 @@ class Store {
 
   saveSettings(patch: { openRouterKey: string }) {
     this.send({ t: 'settings', ...patch })
+  }
+
+  /** Answer the open proposal with an option's artboard, or null for none of them. */
+  pick(nodeId: string | null) {
+    if (!this.proposal) return
+    this.send({ t: 'pick', proposalId: this.proposal.id, nodeId, note: this.pickNote })
+    this.setHover(null)
+  }
+
+  setPickNote(note: string) {
+    this.pickNote = note
+    this.emit()
   }
 
   setSettingsOpen(open: boolean) {

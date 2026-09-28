@@ -363,6 +363,32 @@ export interface LintState {
   error?: string
 }
 
+/** An agent's alternatives for one decision, for the user to choose between. */
+export interface Proposal {
+  id: string
+  question: string
+  options: ProposalOption[]
+}
+
+export interface ProposalOption {
+  /** A top-level artboard. */
+  nodeId: string
+  letter: string
+  label: string
+  /** One line on the trade-off. */
+  note?: string
+}
+
+export interface PickResult {
+  proposalId: string
+  question: string
+  /** null: none of them. */
+  picked: ProposalOption | null
+  note?: string
+  /** The options removed once one was picked. */
+  removed: string[]
+}
+
 // ---- Wire protocol (editor/engine <-> server) --------------------------------
 
 export type ClientMsg =
@@ -394,6 +420,8 @@ export type ClientMsg =
   | { t: 'settings'; openRouterKey: string }
   /** Check the open file's current page against its DESIGN.md. */
   | { t: 'lint' }
+  /** Answer the open proposal: an option's artboard, or null for none. */
+  | { t: 'pick'; proposalId: string; nodeId: string | null; note?: string }
 
 export type ServerMsg =
   | { t: 'doc'; doc: Doc; version: number; pageId: string }
@@ -424,3 +452,4 @@ export type ServerMsg =
   | { t: 'error'; message: string }
   | { t: 'settings'; settings: SettingsState }
   | { t: 'lint'; fileId: string; lint: LintState }
+  | { t: 'proposal'; proposal: Proposal | null }

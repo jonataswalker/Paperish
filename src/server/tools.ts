@@ -30,6 +30,7 @@ import { componentsFor, projectFor, tailwindEntryFor } from './project'
 import { linkProject } from './commands'
 import { compareFiles, openRevision } from './history'
 import { lintFile } from './lint'
+import { propose, waitForPick } from './proposals'
 import { runImport } from './tasks'
 import { toJSX, toStaticHTML } from './serialize'
 import { ARTBOARD_GAP, findPlacement } from './placement'
@@ -2011,6 +2012,77 @@ Moves apply in order. In flex parents this changes visual order; moving onto the
       if (fix) result.fixedNodes = fixed
 
       return json(result)
+    },
+  )
+
+  tool(
+    'propose_options',
+    "Let the user choose instead of guessing. When a decision is a matter of taste or product judgment (layout, density, hierarchy, emphasis, tone, color), build 2 to 4 alternatives as separate artboards side by side, then call this with a short question. Paperish frames them, labels them A to D, and the user picks with a key or a click, optionally with a note. Then call wait_for_pick. Make the options differ only in what's being decided, give each a 1 to 3 word label, and prefer this to asking in chat or picking yourself. Not for things with a right answer (bugs, the spec, DESIGN.md rules).",
+    {
+      question: z
+        .string()
+        .describe('What the user is deciding, e.g. "Which density fits the billing page?"'),
+      options: z
+        .array(
+          z.object({
+            nodeId: z.string().describe('A top-level artboard.'),
+            label: z.string().max(40).describe('1 to 3 words, e.g. "Compact".'),
+            note: z.string().max(200).optional().describe('One line on the trade-off.'),
+          }),
+        )
+        .min(2)
+        .max(4),
+      fileId: fileIdArg,
+    },
+    ({ question, options, fileId }) => {
+      const f = resolve(fileId)
+      const ids = options.map((o) => f.node(o.nodeId).id)
+
+      if (new Set(ids).size !== ids.length) throw new Error('Each option needs its own artboard.')
+      const pages = new Set(ids.map((id) => pageOf(f.doc, id)?.id))
+
+      if (ids.some((id) => f.doc.nodes[f.doc.nodes[id].parent ?? '']?.type !== 'Root'))
+        throw new Error(
+          'Options must be top-level artboards (duplicate the artboard and change the copy).',
+        )
+
+      if (pages.size > 1) throw new Error('Put the options on one page.')
+      const p = propose(f, question, options)
+
+      return json({
+        proposalId: p.id,
+        options: p.options,
+        next: 'Call wait_for_pick with this proposalId.',
+      })
+    },
+  )
+
+  tool(
+    'wait_for_pick',
+    'Wait for the user to answer a proposal from propose_options. Returns the picked option (the other options are then removed from the canvas) and any note, or "none" with a note when nothing fit. If the user has not answered within the timeout it returns "waiting": call it again, or carry on with other work and check back.',
+    {
+      proposalId: z.string(),
+      timeoutSeconds: z.number().int().min(5).max(600).optional().describe('Default 300.'),
+    },
+    async ({ proposalId, timeoutSeconds }) => {
+      const r = await waitForPick(proposalId, (timeoutSeconds ?? 300) * 1000)
+
+      if (!r) return json({ status: 'waiting', proposalId })
+
+      if (!r.picked)
+        return json({
+          status: 'none',
+          note: r.note ?? null,
+          next: 'None of the options fit. Read the note, then propose again or ask.',
+        })
+
+      return json({
+        status: 'picked',
+        picked: r.picked,
+        note: r.note ?? null,
+        removed: r.removed,
+        next: `Continue from artboard ${r.picked.nodeId}${r.note ? ', taking the note into account' : ''}. If this settles a design-system choice (a token or a rule), record it in DESIGN.md.`,
+      })
     },
   )
 

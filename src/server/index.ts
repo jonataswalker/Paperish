@@ -24,6 +24,7 @@ import {
 } from './project'
 import { tailwindColorNames } from './tailwind'
 import { lintFile } from './lint'
+import { pick, proposalFor } from './proposals'
 import { settingsState, updateSettings } from './settings'
 import { runImport } from './tasks'
 import { newPage, Workspace, type Client } from './workspace'
@@ -324,6 +325,7 @@ wss.on('connection', (socket) => {
     send(f.snapshot())
     send({ t: 'working', ids: [...f.working] })
     send({ t: 'repo', repo: f.repo?.state ?? null })
+    send({ t: 'proposal', proposal: proposalFor(f.doc.id) })
     f.repo?.refreshStatus()
     const root = f.doc.project?.root
     const st = projectState(root)
@@ -522,6 +524,7 @@ wss.on('connection', (socket) => {
                 })
               },
             )
+          else if (msg.t === 'pick') pick(f, msg.proposalId, msg.nodeId, msg.note)
           else if (msg.t === 'createPage') {
             const { page, root } = newPage(f, msg.name?.trim() || `Page ${f.doc.pages.length + 1}`)
             f.transact([{ t: 'page:add', page, root }], 'user', 'create page')
