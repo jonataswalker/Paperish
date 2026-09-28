@@ -100,7 +100,7 @@ export interface FontFaceDef {
   unicodeRange?: string
 }
 
-interface CommentMessage {
+export interface CommentMessage {
   id: string
   authorId: string
   authorName: string
@@ -108,10 +108,13 @@ interface CommentMessage {
   createdAt: string
 }
 
-interface CommentThread {
+export interface CommentThread {
   id: string
   pageId: string
   nodeId: string | null
+  /** Where the pin sits: px from the node's top-left, or canvas coordinates without a node. */
+  x?: number
+  y?: number
   status: 'open' | 'resolved'
   createdAt: string
   messages: CommentMessage[]
@@ -420,6 +423,18 @@ export type ClientMsg =
   | { t: 'settings'; openRouterKey: string }
   /** Check the open file's current page against its DESIGN.md. */
   | { t: 'lint' }
+  /** Start a comment thread pinned to a node (or a canvas point when nodeId is null). */
+  | {
+      t: 'comment:create'
+      pageId: string
+      nodeId: string | null
+      x: number
+      y: number
+      text: string
+    }
+  | { t: 'comment:reply'; threadId: string; text: string }
+  | { t: 'comment:status'; threadId: string; status: 'open' | 'resolved' }
+  | { t: 'comment:delete'; threadId: string }
   /** Answer the open proposal: an option's artboard, or null for none. */
   | { t: 'pick'; proposalId: string; nodeId: string | null; note?: string }
 
@@ -453,3 +468,5 @@ export type ServerMsg =
   | { t: 'settings'; settings: SettingsState }
   | { t: 'lint'; fileId: string; lint: LintState }
   | { t: 'proposal'; proposal: Proposal | null }
+  /** The thread this connection just created, so its editor can open it. */
+  | { t: 'comment:created'; threadId: string }

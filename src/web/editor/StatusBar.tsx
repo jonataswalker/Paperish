@@ -4,6 +4,7 @@ import { shallow, store, useCamera, useStore } from '../store'
 import { pathTo, reveal, zoomTo, zoomToFit } from './actions'
 import { Icon } from './icons'
 import { resolveToken } from './Inspector'
+import { CommentsStatus } from './Comments'
 import { DesignStatus } from './DesignChecks'
 import { TaskPill } from './ImportDialog'
 import { useWorldRects } from './measure'
@@ -26,6 +27,7 @@ export function StatusBar() {
       </div>
       <div className="pw-status-right">
         <SelectionPath />
+        <CommentsStatus />
         <Tokens />
         <Codebase />
         <Mcp />
@@ -343,6 +345,7 @@ const SHORTCUTS: [string, string][] = [
   ['⌘Z  ⇧⌘Z', 'Undo, redo'],
   ['I', 'Inspect selection'],
   ['L', 'Design issues'],
+  ['C', 'Comments'],
   ['A  B  C  D', 'Pick an agent\u2019s option'],
   ['⌘,', 'Settings'],
   ['⇧⌘H  ⇧⌘L', 'Hide, lock'],

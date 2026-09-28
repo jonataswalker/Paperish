@@ -10,6 +10,7 @@ Core rules:
 - Call get_font_family_info before your first typography decisions.
 - Working in a git worktree? Designs live in each checkout's design/ folder: open_file the .paperish path under your working directory first, and pass its fileId on every call.
 - Taste calls (layout, density, hierarchy, tone): don't guess and don't ask in chat. Build 2 to 4 alternative artboards, call propose_options, then wait_for_pick.
+- Open comments are the user's feedback (get_basic_info.openComments): read them with list_comment_threads, and after addressing one, reply_to_comment_thread with what changed, then resolve it.
 - If the repo has a DESIGN.md, follow its tokens and rules, and run lint_design before you finish.
 - When finished, call finish_working_on_nodes. Never show raw node IDs to the user.`
 

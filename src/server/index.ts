@@ -24,6 +24,13 @@ import {
 } from './project'
 import { tailwindColorNames } from './tailwind'
 import { lintFile } from './lint'
+import {
+  createThread,
+  deleteThread,
+  personFor,
+  reply as replyToThread,
+  setStatus,
+} from './comments'
 import { pick, proposalFor } from './proposals'
 import { settingsState, updateSettings } from './settings'
 import { runImport } from './tasks'
@@ -319,6 +326,8 @@ wss.on('connection', (socket) => {
   workspace.clients.add(client)
   const send = (msg: ServerMsg) => socket.readyState === 1 && socket.send(JSON.stringify(msg))
 
+  const failed = (e: Error) => send({ t: 'error', message: e.message })
+
   const attach = (fileId: string) => {
     const f = workspace.get(fileId)
     client.fileId = f.doc.id
@@ -525,6 +534,19 @@ wss.on('connection', (socket) => {
               },
             )
           else if (msg.t === 'pick') pick(f, msg.proposalId, msg.nodeId, msg.note)
+          else if (msg.t === 'comment:create')
+            personFor(f)
+              .then((me) => {
+                const t = createThread(f, me, msg, msg.text, 'user')
+                send({ t: 'comment:created', threadId: t.id })
+              })
+              .catch(failed)
+          else if (msg.t === 'comment:reply')
+            personFor(f)
+              .then((me) => replyToThread(f, me, msg.threadId, msg.text, 'user'))
+              .catch(failed)
+          else if (msg.t === 'comment:status') setStatus(f, msg.threadId, msg.status, 'user')
+          else if (msg.t === 'comment:delete') deleteThread(f, msg.threadId, 'user')
           else if (msg.t === 'createPage') {
             const { page, root } = newPage(f, msg.name?.trim() || `Page ${f.doc.pages.length + 1}`)
             f.transact([{ t: 'page:add', page, root }], 'user', 'create page')

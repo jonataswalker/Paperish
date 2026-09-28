@@ -159,6 +159,20 @@ export class OpenFile {
     return this.version
   }
 
+  /** Comments are conversation, not design: they bypass undo so undoing an edit never drops one. */
+  setComments(comments: Doc['comments'], origin: Origin) {
+    if (this.ref)
+      throw new Error(
+        `Read-only: this is ${this.ref.branch} as committed. Switch to a checkout to comment.`,
+      )
+
+    const ops: Op[] = [{ t: 'comments', comments }]
+    this.doc = { ...applyOps(this.doc, ops).doc, updatedAt: new Date().toISOString() }
+    this.version += 1
+    this.broadcast({ t: 'ops', ops, version: this.version, origin })
+    this.scheduleSave()
+  }
+
   undo() {
     const tx = this.undoStack.pop()
 

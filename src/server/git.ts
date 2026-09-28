@@ -202,3 +202,16 @@ export async function commitDate(root: string, rev: string): Promise<string> {
     return ''
   }
 }
+
+/** Who commits in this checkout, per git config. */
+export async function gitUser(dir: string): Promise<{ name: string; email: string }> {
+  const get = (key: string) =>
+    text(dir, ['config', key]).then(
+      (s) => s.trim(),
+      () => '',
+    )
+
+  const [name, email] = await Promise.all([get('user.name'), get('user.email')])
+
+  return { name, email }
+}

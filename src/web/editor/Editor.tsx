@@ -24,6 +24,7 @@ import { Palette } from './Palette'
 import { Home } from './Home'
 import { LintCard, SettingsDialog } from './DesignChecks'
 import { PickBar } from './Pick'
+import { CommentsPanel } from './Comments'
 import { ChangesView } from './Repo'
 import { StatusBar } from './StatusBar'
 import { Topbar } from './Topbar'
@@ -50,6 +51,7 @@ export function Editor() {
         <Inspector />
         <LintCard />
         <PickBar />
+        <CommentsPanel />
         <Palette />
         <SettingsDialog />
         <ImportDialog />
@@ -150,6 +152,10 @@ function useShortcuts() {
 
           if (store.lintOpen) return store.setLintOpen(false)
 
+          if (store.commentDraft) return store.startComment(null)
+
+          if (store.activeThread) return store.openThread(null)
+
           if (store.tool !== 'move') return store.setTool('move')
 
           return selectParent()
@@ -162,6 +168,8 @@ function useShortcuts() {
           return store.setTool('frame')
         case 't':
           return store.setTool('text')
+        case 'c':
+          return store.setTool(store.tool === 'comment' ? 'move' : 'comment')
         case 'h':
           return store.setTool('hand')
         case 'p':

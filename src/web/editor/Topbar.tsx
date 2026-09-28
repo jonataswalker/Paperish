@@ -9,6 +9,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: React.ReactNode }[] =
   { id: 'frame', label: 'Frame', key: 'F', icon: <Icon.Frame size={16} /> },
   { id: 'text', label: 'Text', key: 'T', icon: <Icon.Text size={16} /> },
   { id: 'hand', label: 'Hand', key: 'H', icon: <Icon.Hand /> },
+  { id: 'comment', label: 'Comment', key: 'C', icon: <Icon.Comment size={16} /> },
 ]
 
 export function Topbar() {

@@ -104,6 +104,10 @@ Paperish checks designs against the repo's design system, so a team without a de
 
 Agents don't guess on taste. For a call that's yours to make (layout, density, emphasis, tone), the agent builds 2 to 4 alternatives as artboards and calls `propose_options` with a question. Paperish frames them, labels them A to D, and shows the question in a bar at the bottom: press a letter (or click), optionally with a note, or answer None. `wait_for_pick` returns your answer to the agent; the picked artboard takes the first option's place and the others are removed, in one undo step. The agent guide tells agents to propose this way, and to record choices that settle the design system in DESIGN.md.
 
+## Comments
+
+Press C (or the comment count in the status bar) for comment mode: pins show on the canvas and the threads open in a panel. Click a layer to pin a comment to it; reply, resolve or delete from the panel. You're named from the checkout's `git config user.name`; agents sign with their own name, and their pins are orange. Comments live in the `.paperish` file and stay out of undo, so undoing an edit never drops one. Agents see `openComments` in `get_basic_info`, reply with `reply_to_comment_thread` once they've addressed one, then resolve it; `create_comment_thread` leaves a note for later.
+
 ## Designs in your repo
 
 Every file is a `.paperish` file in the project's `design/` folder, e.g. `design/checkout.paperish`:
@@ -138,7 +142,7 @@ Names and argument shapes match Paper's MCP (captured in `reference/paper-tools.
 | Write | `create_artboard` `write_html` `set_text_content` `update_styles` `rename_nodes` `duplicate_nodes` `move_nodes` `delete_nodes` `finish_working_on_nodes` |
 | Tokens | `get_tokens` `create_tokens` `set_tokens` |
 | Pick | `propose_options` `wait_for_pick` |
-| Comments | `list_comment_threads` `get_comment_thread` `list_comment_thread_authors` `set_comment_thread_status` |
+| Comments | `list_comment_threads` `get_comment_thread` `list_comment_thread_authors` `set_comment_thread_status` `reply_to_comment_thread` `create_comment_thread` |
 | Export | `export` (png, jpg, webp, pdf, svg via foreignObject) `export_combined_pdf` |
 
 Extras beyond Paper:
@@ -151,7 +155,7 @@ Extras beyond Paper:
 
 | Keys | Action |
 | --- | --- |
-| `V` / `F` / `T` / `H` | Move, frame, text and hand tools |
+| `V` / `F` / `T` / `H` / `C` | Move, frame, text, hand and comment tools |
 | Space + drag, scroll | Pan |
 | ⌘ + scroll, pinch | Zoom |
 | ⇧1 / ⇧2 | Fit all / fit selection |
@@ -198,7 +202,6 @@ The inspector edits common properties, or the node's full CSS directly. It can a
 
 ## Not yet
 
-- Comment UI (the data model and tools exist)
 - Drag-to-reorder inside flex layouts and in the layer tree
 - Snapping and rulers
 - Components and instances

@@ -182,6 +182,12 @@ export const Icon = {
     ),
   Play: ({ size = 14 }: P) => svg(size, <path d="M5 3.5v9l7.5-4.5z" />),
   Close: ({ size = 16 }: P) => svg(size, <path d="m4 4 8 8M12 4l-8 8" />),
+  Check: ({ size = 14 }: P) => svg(size, <path d="m3.5 8.5 3 3 6-7" />),
+  Comment: ({ size = 14 }: P) =>
+    svg(
+      size,
+      <path d="M3 12.5V4.5a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H5.5L3 12.5Z" />,
+    ),
   Edit: ({ size = 15 }: P) =>
     svg(
       size,

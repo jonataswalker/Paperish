@@ -27,7 +27,7 @@ export interface Camera {
 
 type Listener = () => void
 
-export type Tool = 'move' | 'frame' | 'text' | 'hand'
+export type Tool = 'move' | 'frame' | 'text' | 'hand' | 'comment'
 
 export type PreviewMode = 'fit' | 'actual' | 'responsive'
 
@@ -99,6 +99,10 @@ class Store {
   /** An agent's options waiting for the user to pick one, and the note to send with the pick. */
   proposal: Proposal | null = null
   pickNote = ''
+  /** Comment mode: the thread open in the panel, and a pin placed but not yet posted. */
+  activeThread: string | null = null
+  commentDraft: { pageId: string; nodeId: string | null; x: number; y: number } | null = null
+  showResolved = false
 
   // Three channels so hot paths stay cheap: the camera changes on every wheel
   // event and only a handful of things draw from it; each rendered node only
@@ -243,6 +247,8 @@ class Store {
 
           this.lint = null
           this.proposal = null
+          this.activeThread = null
+          this.commentDraft = null
 
           if (!ENGINE_MODE && !VIEW_NODE) {
             history.replaceState(null, '', `?file=${msg.doc.id}`)
@@ -302,6 +308,10 @@ class Store {
         break
       }
 
+      case 'comment:created':
+        this.activeThread = msg.threadId
+        this.commentDraft = null
+        break
       case 'files':
         this.files = msg.files
         this.projectInfo = msg.project
@@ -336,6 +346,8 @@ class Store {
         this.lint = null
         this.lintOpen = false
         this.proposal = null
+        this.activeThread = null
+        this.commentDraft = null
         this.setEditingText(null)
 
         if (!ENGINE_MODE && !VIEW_NODE) history.replaceState(null, '', location.pathname)
@@ -507,6 +519,31 @@ class Store {
     this.emit()
   }
 
+  startComment(draft: Store['commentDraft']) {
+    this.commentDraft = draft
+    this.activeThread = null
+    this.emit()
+  }
+
+  postComment(text: string) {
+    if (this.commentDraft) this.send({ t: 'comment:create', ...this.commentDraft, text })
+  }
+
+  openThread(id: string | null) {
+    const t = id ? this.doc?.comments.find((c) => c.id === id) : null
+    this.tool = 'comment'
+    this.activeThread = t?.id ?? null
+    this.commentDraft = null
+
+    if (t && t.pageId !== this.pageId) this.setPage(t.pageId)
+    this.emit()
+  }
+
+  setShowResolved(show: boolean) {
+    this.showResolved = show
+    this.emit()
+  }
+
   setSettingsOpen(open: boolean) {
     this.settingsOpen = open
     this.emit()
@@ -553,6 +590,12 @@ class Store {
 
   setTool(tool: Tool) {
     this.tool = tool
+
+    if (tool !== 'comment') {
+      this.activeThread = null
+      this.commentDraft = null
+    }
+
     this.emit()
   }
 

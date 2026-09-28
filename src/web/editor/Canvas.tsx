@@ -380,6 +380,21 @@ export function Canvas() {
 
     const hit = labelId ?? hitId(e.target)
 
+    if (tool === 'comment') {
+      e.preventDefault()
+
+      if (store.view?.kind === 'branch') return
+      const p = toWorld(e.clientX, e.clientY)
+      const r = hit ? worldRect(hit) : null
+
+      return store.startComment({
+        pageId: store.pageId,
+        nodeId: r ? hit : null,
+        x: r ? p.x - r.x : p.x,
+        y: r ? p.y - r.y : p.y,
+      })
+    }
+
     if (tool === 'frame' || tool === 'text') {
       let container: string | null = null
 
@@ -414,14 +429,18 @@ export function Canvas() {
   }
 
   const onPointerMove = (e: RPointerEvent) => {
-    if (e.buttons || tool !== 'move') return
+    if (e.buttons || (tool !== 'move' && tool !== 'comment')) return
 
     // SAFETY: pointer target in the canvas is an element; closest finds the artboard label.
     const labelId = (e.target as HTMLElement).closest<HTMLElement>('[data-label-for]')?.dataset
       .labelFor
 
     const hit = labelId ?? hitId(e.target)
-    store.setHover(hit ? (labelId ?? pickTarget(hit, e.metaKey || e.ctrlKey)) : null)
+    store.setHover(
+      hit
+        ? (labelId ?? (tool === 'comment' ? hit : pickTarget(hit, e.metaKey || e.ctrlKey)))
+        : null,
+    )
   }
 
   const onDoubleClick = (e: React.MouseEvent) => {
@@ -442,7 +461,7 @@ export function Canvas() {
     ? 'grabbing'
     : space || tool === 'hand'
       ? 'grab'
-      : tool === 'frame' || tool === 'text'
+      : tool === 'frame' || tool === 'text' || tool === 'comment'
         ? 'crosshair'
         : 'default'
 

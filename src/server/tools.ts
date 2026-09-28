@@ -30,6 +30,7 @@ import { componentsFor, projectFor, tailwindEntryFor } from './project'
 import { linkProject } from './commands'
 import { compareFiles, openRevision } from './history'
 import { lintFile } from './lint'
+import { agentNamed, createThread, reply, setStatus } from './comments'
 import { propose, waitForPick } from './proposals'
 import { runImport } from './tasks'
 import { toJSX, toStaticHTML } from './serialize'
@@ -468,6 +469,7 @@ export function createMcpServer(ws: Workspace, projectId: string): McpServer {
       fonts: [...fonts],
       tokens: f.doc.tokens.map((t) => `${t.name}: ${t.value}`),
       selection: f.selection.pageId === f.pageId ? f.selection.ids : [],
+      openComments: f.doc.comments.filter((t) => t.status === 'open').length,
       codebase: (() => {
         const p = projectFor(f.doc)
 
@@ -873,12 +875,57 @@ export function createMcpServer(ws: Workspace, projectId: string): McpServer {
     ({ commentThreadId, status, fileId }) => {
       const f = resolve(fileId)
 
-      if (!f.doc.comments.some((c) => c.id === commentThreadId))
-        return fail(`Comment thread "${commentThreadId}" not found.`)
-      const comments = f.doc.comments.map((c) => (c.id === commentThreadId ? { ...c, status } : c))
-      f.transact([{ t: 'comments', comments }], 'agent', 'set_comment_thread_status')
+      setStatus(f, commentThreadId, status, 'agent')
 
       return json({ commentThreadId, status })
+    },
+  )
+
+  const authorName = z
+    .string()
+    .max(40)
+    .optional()
+    .describe('Your name as the user should see it, e.g. "Claude". Defaults to "Agent".')
+
+  tool(
+    'reply_to_comment_thread',
+    'Reply in a comment thread, e.g. to say what you changed for it or to ask a question. After addressing a thread, reply with what changed, then set_comment_thread_status to "resolved".',
+    { commentThreadId: z.string().min(1), text: z.string().min(1), authorName, fileId: fileIdArg },
+    ({ commentThreadId, text: body, authorName: name, fileId }) => {
+      const f = resolve(fileId)
+      const m = reply(f, agentNamed(name), commentThreadId, body, 'agent')
+
+      return json({ commentThreadId, messageId: m.id })
+    },
+  )
+
+  tool(
+    'create_comment_thread',
+    'Leave a comment pinned to a node, for something the user should look at or decide later (a question, a trade-off you made, a follow-up). Not for choices you need answered now: use propose_options for those.',
+    {
+      nodeId: z.string().min(1),
+      text: z.string().min(1),
+      x: z.number().optional().describe("Pin position in px from the node's top-left (default 0)."),
+      y: z.number().optional(),
+      authorName,
+      fileId: fileIdArg,
+    },
+    ({ nodeId, text: body, x, y, authorName: name, fileId }) => {
+      const f = resolve(fileId)
+      const n = f.node(nodeId)
+      const page = pageOf(f.doc, n.id)
+
+      if (!page) return fail(`Node "${nodeId}" isn't on a page.`)
+
+      const t = createThread(
+        f,
+        agentNamed(name),
+        { pageId: page.id, nodeId: n.id, x: x ?? 0, y: y ?? 0 },
+        body,
+        'agent',
+      )
+
+      return json({ commentThreadId: t.id, pageId: t.pageId, nodeId: t.nodeId })
     },
   )
 

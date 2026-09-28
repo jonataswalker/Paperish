@@ -1,6 +1,7 @@
 import type { CSSProperties, Ref } from 'react'
 import { shallow, useStore } from '../store'
 import type { Box } from './actions'
+import { CommentPins } from './Comments'
 import { useWorldRects } from './measure'
 
 // Screen-space chrome drawn above the canvas: artboard labels, agent working
@@ -111,6 +112,7 @@ export function Overlay({
 
         {marquee && <div className="pw-ob pw-marquee" style={vars(marquee)} />}
         {draft && <div className="pw-ob pw-draft" style={vars(draft)} />}
+        <CommentPins />
       </div>
     </div>
   )
