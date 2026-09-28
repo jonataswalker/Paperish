@@ -2062,7 +2062,7 @@ Moves apply in order. In flex parents this changes visual order; moving onto the
 
   tool(
     'create_tokens',
-    'Create design tokens ({type, name: "--color-primary", value, description?}). Alias with var(--other). Reuse existing tokens where possible. Colors: semantic first (neutrals, then primary, secondary, accent); other types smallest value first.',
+    'Create design tokens ({type, name: "--color-primary", value, description?}). Alias with var(--other). Reuse existing tokens where possible. Colors: semantic first (neutrals, then primary, secondary, accent); other types smallest value first. Opacity is a unitless 0 to 1 (or a percentage), not a px length.',
     {
       tokens: z
         .array(
@@ -2251,6 +2251,7 @@ interface TokenNamespaceMap {
 
 const TW_NS: TokenNamespaceMap = {
   color: 'color',
+  opacity: 'opacity',
   spacing: 'spacing',
   radius: 'radius',
   fontSize: 'text',
@@ -2269,7 +2270,7 @@ function tailwindTokenName(t: Token): string {
   if (bare.startsWith(ns + '-')) return t.name
 
   const stripped = bare.replace(
-    /^(color|colors|space|spacing|radius|rounded|font-size|text|font|font-weight|weight|leading|line-height|tracking|letter-spacing|breakpoint|bp|container)-/,
+    /^(color|colors|opacity|space|spacing|radius|rounded|font-size|text|font|font-weight|weight|leading|line-height|tracking|letter-spacing|breakpoint|bp|container)-/,
     '',
   )
 

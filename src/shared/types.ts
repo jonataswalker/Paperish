@@ -65,6 +65,7 @@ export type TokenType =
   | 'fontWeight'
   | 'letterSpacing'
   | 'lineHeight'
+  | 'opacity'
   | 'radius'
   | 'spacing'
 
@@ -77,6 +78,7 @@ export const TOKEN_TYPES: TokenType[] = [
   'fontWeight',
   'letterSpacing',
   'lineHeight',
+  'opacity',
   'radius',
   'spacing',
 ]
