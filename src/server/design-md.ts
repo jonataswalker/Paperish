@@ -3,6 +3,7 @@ import path from 'node:path'
 import { parse } from 'yaml'
 import { z } from 'zod'
 import type { JsonValue } from '../shared/types'
+import { designMdPath } from './projects'
 
 // A repo's DESIGN.md (https://github.com/google-labs-code/design.md): YAML
 // front matter with tokens, and prose whose "Do's and Don'ts" become rules.
@@ -27,7 +28,7 @@ const cache = new Map<string, { mtime: number; ds: DesignSystem }>()
 
 /** The checkout's DESIGN.md, or null when it has none. Throws on front matter that isn't YAML. */
 export function readDesignMd(checkout: string): DesignSystem | null {
-  const file = path.join(checkout, 'DESIGN.md')
+  const file = path.join(checkout, designMdPath(checkout))
   let mtime: number
 
   try {

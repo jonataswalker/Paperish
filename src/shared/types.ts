@@ -315,7 +315,10 @@ export interface TaskState {
 /** App-wide settings as the editor sees them (the OpenRouter key itself stays on the server). */
 export interface SettingsState {
   openRouter: boolean
+  theme: ThemeSetting
 }
+
+export type ThemeSetting = 'system' | 'light' | 'dark'
 
 /** What the layout engine measures of one rendered node for design checks. */
 export type AuditFact = {
@@ -420,9 +423,11 @@ export type ClientMsg =
   | { t: 'importUrl'; url: string; width?: number; token?: string }
   | { t: 'createPage'; name?: string }
   /** Set the OpenRouter key; empty removes it. */
-  | { t: 'settings'; openRouterKey: string }
+  | { t: 'settings'; openRouterKey?: string; theme?: ThemeSetting }
   /** Check the open file's current page against its DESIGN.md. */
   | { t: 'lint' }
+  /** Pick the project's DESIGN.md with the system dialog, then check again. */
+  | { t: 'pickDesignMd' }
   /** Start a comment thread pinned to a node (or a canvas point when nodeId is null). */
   | {
       t: 'comment:create'

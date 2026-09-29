@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { SettingsState } from '../shared/types'
+import { nativeTheme } from 'electron'
+import type { SettingsState, ThemeSetting } from '../shared/types'
 import { DATA_DIR } from './config'
 
 // App-wide settings, kept in the data folder next to the project list. The
@@ -10,9 +11,14 @@ const FILE = path.join(DATA_DIR, 'settings.json')
 
 interface Settings {
   openRouterKey?: string
+  theme?: ThemeSetting
 }
 
+const THEMES = new Set<ThemeSetting>(['system', 'light', 'dark'])
+
 let current: Settings = read()
+
+nativeTheme.themeSource = theme()
 
 function read(): Settings {
   try {
@@ -26,17 +32,27 @@ export function openRouterKey(): string | undefined {
   return current.openRouterKey || process.env.OPENROUTER_API_KEY || undefined
 }
 
-export function settingsState(): SettingsState {
-  return { openRouter: !!openRouterKey() }
+function theme(): ThemeSetting {
+  return current.theme && THEMES.has(current.theme) ? current.theme : 'system'
 }
 
-export function updateSettings(patch: { openRouterKey: string }) {
-  const next = { ...current }
-  const key = String(patch.openRouterKey ?? '').trim()
+export function settingsState(): SettingsState {
+  return { openRouter: !!openRouterKey(), theme: theme() }
+}
 
-  if (key) next.openRouterKey = key
-  else delete next.openRouterKey
+export function updateSettings(patch: { openRouterKey?: string; theme?: ThemeSetting }) {
+  const next = { ...current }
+
+  if (patch.openRouterKey !== undefined) {
+    const key = String(patch.openRouterKey).trim()
+
+    if (key) next.openRouterKey = key
+    else delete next.openRouterKey
+  }
+
+  if (patch.theme && THEMES.has(patch.theme)) next.theme = patch.theme
   fs.mkdirSync(DATA_DIR, { recursive: true })
   fs.writeFileSync(FILE, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 })
   current = next
+  nativeTheme.themeSource = theme()
 }

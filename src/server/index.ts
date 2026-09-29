@@ -24,6 +24,7 @@ import {
 } from './project'
 import { tailwindColorNames } from './tailwind'
 import { lintFile } from './lint'
+import { setDesignMdPath } from './projects'
 import {
   createThread,
   deleteThread,
@@ -34,7 +35,7 @@ import {
 import { pick, proposalFor } from './proposals'
 import { settingsState, updateSettings } from './settings'
 import { runImport } from './tasks'
-import { newPage, Workspace, type Client } from './workspace'
+import { newPage, Workspace, type Client, type OpenFile } from './workspace'
 
 const workspace = new Workspace()
 
@@ -328,6 +329,21 @@ wss.on('connection', (socket) => {
 
   const failed = (e: Error) => send({ t: 'error', message: e.message })
 
+  const sendLint = (f: OpenFile) =>
+    lintFile(f).then(
+      (lint) => send({ t: 'lint', fileId: f.doc.id, lint }),
+      (e) => {
+        // SAFETY: lintFile rejects with Error instances for engine failures.
+        const error = (e as Error).message
+
+        send({
+          t: 'lint',
+          fileId: f.doc.id,
+          lint: { designMd: null, issues: [], rules: { count: 0, status: 'none' }, error },
+        })
+      },
+    )
+
   const attach = (fileId: string) => {
     const f = workspace.get(fileId)
     client.fileId = f.doc.id
@@ -519,21 +535,31 @@ wss.on('connection', (socket) => {
               // SAFETY: runImport rejects with Error for failed imports.
               console.warn('[paperish] import failed:', (e as Error).message),
             )
-          else if (msg.t === 'lint')
-            lintFile(f).then(
-              (lint) => send({ t: 'lint', fileId: f.doc.id, lint }),
-              (e) => {
-                // SAFETY: lintFile rejects with Error instances for engine failures.
-                const error = (e as Error).message
+          else if (msg.t === 'lint') sendLint(f)
+          else if (msg.t === 'pickDesignMd') {
+            const checkout = f.checkout
 
-                send({
-                  t: 'lint',
-                  fileId: f.doc.id,
-                  lint: { designMd: null, issues: [], rules: { count: 0, status: 'none' }, error },
-                })
-              },
-            )
-          else if (msg.t === 'pick') pick(f, msg.proposalId, msg.nodeId, msg.note)
+            if (!checkout)
+              throw new Error('A branch viewed as committed can’t change its DESIGN.md.')
+            const win = BrowserWindow.getFocusedWindow()
+
+            const opts = {
+              title: 'Choose DESIGN.md',
+              buttonLabel: 'Use This File',
+              defaultPath: checkout,
+              properties: ['openFile'],
+              filters: [{ name: 'Markdown', extensions: ['md'] }],
+            } satisfies Electron.OpenDialogOptions
+
+            // SAFETY: setDesignMdPath throws Error for files outside the checkout.
+            void (win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts))
+              .then((r) => {
+                if (r.canceled || !r.filePaths[0]) return
+                setDesignMdPath(checkout, r.filePaths[0])
+                sendLint(f)
+              })
+              .catch((e) => send({ t: 'error', message: (e as Error).message }))
+          } else if (msg.t === 'pick') pick(f, msg.proposalId, msg.nodeId, msg.note)
           else if (msg.t === 'comment:create')
             personFor(f)
               .then((me) => {

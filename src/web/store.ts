@@ -16,6 +16,7 @@ import type {
   RepoState,
   ServerMsg,
   SettingsState,
+  ThemeSetting,
   TaskState,
 } from '../shared/types'
 
@@ -503,7 +504,7 @@ class Store {
     this.emit()
   }
 
-  saveSettings(patch: { openRouterKey: string }) {
+  saveSettings(patch: { openRouterKey?: string; theme?: ThemeSetting }) {
     this.send({ t: 'settings', ...patch })
   }
 
@@ -554,6 +555,10 @@ class Store {
 
     if (open) this.inspectOpen = false
     this.emit()
+  }
+
+  pickDesignMd() {
+    this.send({ t: 'pickDesignMd' })
   }
 
   /** Re-check the page once edits settle. */

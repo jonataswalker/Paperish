@@ -281,6 +281,32 @@ export class Projects {
   }
 }
 
+function readMarker(checkout: string): Record<string, JsonValue> {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(designDir(checkout), MARKER), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+/** The checkout's DESIGN.md, relative to it: the one paperish.json points at, else the root's. */
+export function designMdPath(checkout: string): string {
+  const rel = readMarker(checkout).designMd
+
+  return isStringValue(rel) && rel ? rel : 'DESIGN.md'
+}
+
+/** Point the project at a DESIGN.md outside the root (saved in paperish.json, so it's shared). */
+export function setDesignMdPath(checkout: string, file: string) {
+  const rel = path.relative(checkout, file)
+
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel))
+    throw new Error(`Pick a file inside ${checkout}.`)
+  const marker = { ...readMarker(checkout), designMd: rel.split(path.sep).join('/') }
+  fs.mkdirSync(designDir(checkout), { recursive: true })
+  fs.writeFileSync(path.join(designDir(checkout), MARKER), JSON.stringify(marker, null, 2) + '\n')
+}
+
 function repoName(root: string): string {
   try {
     const name = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name
@@ -291,7 +317,7 @@ function repoName(root: string): string {
   return path.basename(root)
 }
 
-function isStringValue(v: string | undefined): v is string {
+function isStringValue(v: JsonValue | undefined): v is string {
   return Object.prototype.toString.call(v) === '[object String]'
 }
 

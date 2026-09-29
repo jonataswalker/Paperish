@@ -2,7 +2,7 @@
   "paperish": 1,
   "name": "paperish",
   "codebase": "..",
-  "seq": 15693,
+  "seq": 15694,
   "pages": [
     { "id": "P2", "name": "Home", "rootId": "R1" },
     { "id": "PFP", "name": "Canvas", "rootId": "RFO" },

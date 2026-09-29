@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { LintState } from '../../shared/types'
+import type { LintState, ThemeSetting } from '../../shared/types'
 import { store, useStore } from '../store'
 import { reveal } from './actions'
 import { Icon } from './icons'
@@ -7,6 +7,12 @@ import { Icon } from './icons'
 // Design checks against the repo's DESIGN.md, so a team without a designer
 // still ships consistent screens: the status bar count, the issues card, and
 // the OpenRouter key that lets Jev judge the Do's and Don'ts.
+
+const THEMES: { value: ThemeSetting; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
 
 export function SettingsDialog() {
   const open = useStore((s) => s.settingsOpen)
@@ -43,6 +49,20 @@ export function SettingsDialog() {
         <header className="pw-modal-head">
           <span>Settings</span>
         </header>
+        <div className="pw-modal-row">
+          <span className="pw-muted">Appearance</span>
+          <div className="pw-seg-light" role="group" aria-label="Appearance">
+            {THEMES.map((o) => (
+              <button
+                key={o.value}
+                className={o.value === settings.theme ? 'active' : ''}
+                onClick={() => store.saveSettings({ theme: o.value })}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="pw-modal-text">
           Designs are checked against the repo's DESIGN.md. Its Do's and Don'ts are judged by Jev
           through OpenRouter, with your key. The key stays in Paperish's data folder on this
@@ -96,14 +116,14 @@ export function DesignStatus() {
 
   return (
     <>
-      <span
+      <button
         className="pw-status-item"
-        title={
-          lint.designMd ?? 'Add a DESIGN.md at the repo root to check designs against your system'
-        }
+        title={`${lint.designMd ?? 'No DESIGN.md at the repo root'}. Click to choose another file`}
+        onClick={() => store.pickDesignMd()}
       >
-        <Icon.File size={12} /> {lint.designMd ? 'DESIGN.md' : 'No DESIGN.md'}
-      </span>
+        <Icon.File size={12} />{' '}
+        {lint.designMd ? lint.designMd.split(/[\\/]/).pop() : 'No DESIGN.md'}
+      </button>
       <button
         className={`pw-status-item ${open ? 'on' : ''}`}
         title="Design issues (L)"
@@ -211,7 +231,10 @@ function Source({ lint }: { lint: LintState }) {
       <span>
         {lint.designMd
           ? 'Checked against DESIGN.md.'
-          : 'No DESIGN.md in this repo, so only contrast and the 4px grid are checked.'}
+          : 'No DESIGN.md at the repo root, so only contrast and the 4px grid are checked.'}{' '}
+        <button onClick={() => store.pickDesignMd()}>
+          {lint.designMd ? 'Change' : 'Choose file'}
+        </button>
       </span>
       {status === 'checked' && <span> Jev checked {rules}.</span>}
       {status === 'no-key' && (
