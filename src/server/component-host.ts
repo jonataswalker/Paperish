@@ -62,12 +62,14 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
   const extraPlugins: unknown[] = []
   const alias: { find: RegExp; replacement: string }[] = []
   let define: Record<string, string> | undefined
+  let postcss: { plugins: unknown[] } | undefined
 
-  // Without a Vite config (Next.js, CRA…) bring our own framework plugins.
+  // Without a Vite config (Next.js, CRA, Nuxt…) bring our own framework plugins.
   if (!configFile) {
-    const shims = frameworkShims(vite, root)
+    const shims = await frameworkShims(vite, root, state.tailwind)
     extraPlugins.push(...shims.plugins)
     define = shims.define
+    postcss = shims.postcss
 
     if (state.frameworks.includes('react'))
       extraPlugins.push((await import('@vitejs/plugin-react')).default())
@@ -141,6 +143,7 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
     plugins: [hostPlugin, ...(extraPlugins as never[])],
     resolve: alias.length ? { alias } : undefined,
     define,
+    css: postcss ? { postcss } : undefined,
     server: { host: '127.0.0.1', port: HOST_BASE_PORT, strictPort: false, open: false, cors: true },
     optimizeDeps: {
       entries: state.components.map((c) => c.file),
@@ -267,7 +270,7 @@ function entrySource(root: string, state: ProjectState): string {
     )
   }
 
-  if (hasVue) lines.push(`import { createApp, h, reactive, markRaw } from 'vue';`)
+  if (hasVue) lines.push(`import { createApp, h, reactive, markRaw, Suspense } from 'vue';`)
   lines.push(
     `const loaders = {${files.map((f) => `${JSON.stringify(f)}: () => import(${JSON.stringify('/' + f)})`).join(',\n')}};`,
   )
@@ -299,12 +302,13 @@ const post = (m) => parent.postMessage({ ...m, iid, __paperish: true }, '*');
 let lastSize = '';
 // Screen-like components (fixed overlays, 100vh layouts) size themselves from
 // the viewport, which is this frame: measured alone they collapse to zero. Give
-// anything that rendered elements but measures empty a desktop screen to fill.
+// anything that rendered visible elements but measures empty a desktop screen to fill.
 const SCREEN = { w: 1440, h: 900 };
+const visible = () => [...root.querySelectorAll('*')].some((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0; });
 const report = () => {
   const r = root.getBoundingClientRect();
   let w = Math.ceil(r.width), hh = Math.ceil(r.height);
-  if (root.firstElementChild && (w < 2 || hh < 2)) {
+  if ((w < 2 || hh < 2) && visible()) {
     if (w < 2) w = SCREEN.w;
     if (hh < 2) hh = SCREEN.h;
   }
@@ -324,15 +328,41 @@ async function load(id) {
   cache.set(id, comp);
   return comp;
 }
-window.addEventListener('error', (e) => post({ type: 'pw:error', message: String(e.message) }));
-window.addEventListener('unhandledrejection', (e) => post({ type: 'pw:error', message: String(e.reason && e.reason.message || e.reason) }));
+let failed = false;
+const unresolved = new Set();
+const fail = (err) => { failed = true; post({ type: 'pw:error', message: String(err && err.message || err) }); };
+window.addEventListener('error', (e) => fail(e.message));
+window.addEventListener('unhandledrejection', (e) => fail(e.reason));
+const styledClasses = () => {
+  const out = new Set();
+  const walk = (rules) => {
+    for (const r of rules) {
+      if (r.selectorText) for (const m of r.selectorText.matchAll(/\\.((?:\\\\.|[\\w-])+)/g)) out.add(m[1].replace(/\\\\(.)/g, '$1'));
+      if (r.cssRules) walk(r.cssRules);
+    }
+  };
+  for (const sheet of document.styleSheets) { try { walk(sheet.cssRules); } catch {} }
+  return out;
+};
+const check = () => {
+  const issues = [];
+  const els = [...root.querySelectorAll('*')];
+  if (!visible() && !root.textContent.trim()) issues.push('Rendered nothing visible');
+  if (unresolved.size) issues.push('Unresolved components: ' + [...unresolved].join(', '));
+  const used = new Set(els.flatMap((e) => [...e.classList]));
+  const styled = styledClasses();
+  const bare = [...used].filter((c) => !styled.has(c));
+  if (bare.length >= 3 && bare.length > used.size / 2)
+    issues.push(bare.length + ' of ' + used.size + ' classes have no CSS (' + bare.slice(0, 4).join(', ') + (bare.length > 4 ? ', …' : '') + '): Tailwind or global stylesheets are not loaded');
+  return issues;
+};
 `
 
 const RUNTIME_REACT = `
 class PwBoundary extends React.Component {
   constructor(p) { super(p); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error) { post({ type: 'pw:error', message: String(error && error.message || error) }); }
+  componentDidCatch(error) { fail(error); }
   render() { return this.state.error ? null : this.props.children; }
 }
 const asyncWrapped = new WeakMap();
@@ -342,7 +372,7 @@ const serverish = (C) => {
     const [el, setEl] = React.useState(null);
     React.useEffect(() => {
       let live = true;
-      Promise.resolve(C(p)).then((v) => live && setEl(v), (err) => post({ type: 'pw:error', message: String(err && err.message || err) }));
+      Promise.resolve(C(p)).then((v) => live && setEl(v), fail);
       return () => { live = false; };
     }, []);
     return el;
@@ -373,18 +403,21 @@ let vueApp = null;
 const toVue = (nodes) => nodes.map((n) => n.t === 'text' ? n.v
   : n.t === 'el' ? h(n.tag, n.props, n.children.length ? toVue(n.children) : undefined)
   : h(vstate.comps[n.ref] || 'div', n.props, n.children.length ? { default: () => toVue(n.children) } : undefined));
+let vueDone = null;
+// Suspense so components with an async setup (top-level await) render too.
 function renderVue(Comp, props, tree, comps, done) {
   const { children, ...rest } = props;
+  vueDone = done;
   vstate.comp = markRaw(Comp); vstate.props = rest; vstate.comps = markRaw(comps);
   vstate.tree = tree.length ? tree : (children != null ? [{ t: 'text', v: String(children) }] : []);
   vstate.n++;
   if (!vueApp) {
-    vueApp = createApp({ render: () => vstate.comp ? h(vstate.comp, { ...vstate.props, key: vstate.n }, vstate.tree.length ? { default: () => toVue(vstate.tree) } : undefined) : null });
-    vueApp.config.errorHandler = (err) => post({ type: 'pw:error', message: String(err && err.message || err) });
-    vueApp.config.warnHandler = () => {};
+    const resolved = () => { const d = vueDone; vueDone = null; if (d) d(); };
+    vueApp = createApp({ render: () => h(Suspense, { onResolve: resolved }, { default: () => vstate.comp ? h(vstate.comp, { ...vstate.props, key: vstate.n }, vstate.tree.length ? { default: () => toVue(vstate.tree) } : undefined) : null }) });
+    vueApp.config.errorHandler = fail;
+    vueApp.config.warnHandler = (msg) => { const m = /Failed to resolve component: ([\\w.-]+)/.exec(msg); if (m) unresolved.add(m[1]); };
     vueApp.mount(root);
   }
-  Promise.resolve().then(done);
 }
 `
 
@@ -393,15 +426,17 @@ window.addEventListener('message', async (e) => {
   const d = e.data;
   if (e.source !== parent || !d || d.type !== 'pw:render') return;
   root.className = d.fill ? 'fill' : '';
+  failed = false;
+  unresolved.clear();
   try {
     const Comp = await load(d.component);
     const comps = {};
     for (const id of d.refs || []) { try { comps[id] = await load(id); } catch {} }
-    const done = () => requestAnimationFrame(() => { report(); post({ type: 'pw:rendered' }); });
+    const done = () => requestAnimationFrame(() => { report(); if (!failed) post({ type: 'pw:rendered', issues: check() }); });
     if (frameworks[d.component] === 'vue') renderVue(Comp, d.props || {}, d.tree || [], comps, done);
     else renderReact(Comp, d.props || {}, d.tree || [], comps, done);
   } catch (err) {
-    post({ type: 'pw:error', message: String(err && err.message || err) });
+    fail(err);
   }
 });
 post({ type: 'pw:ready' });

@@ -263,6 +263,17 @@ async function overflowWarnings(f: OpenFile, artboardIds: string[]): Promise<str
   return out
 }
 
+/** Real components under these nodes that failed to render, rendered blank or unstyled. */
+async function componentWarnings(f: OpenFile, ids: string[], pageId?: string): Promise<string[]> {
+  if (!f.doc.project || !ids.length) return []
+  const res = await engine.call<Record<string, string>>(f, 'components', { ids }, pageId)
+
+  return Object.entries(res).map(
+    ([id, problem]) =>
+      `Component ${f.doc.nodes[id]?.name ?? id} (${id}) did not render cleanly: ${problem}`,
+  )
+}
+
 function componentSummary(c: import('../shared/types').ComponentInfo) {
   return {
     name: c.name,
@@ -589,13 +600,14 @@ export function createMcpServer(ws: Workspace, projectId: string): McpServer {
       if (n.type === 'Root') return fail('Screenshot an artboard or node, not the page root.')
       const pageId = pageOf(f.doc, n.id)?.id
       const shot = await engine.screenshot(f, n.id, { scale, transparent }, pageId)
+      const notes = await componentWarnings(f, [n.id], pageId)
 
       return {
         content: [
           { type: 'image', data: shot.data, mimeType: shot.mimeType },
           {
             type: 'text',
-            text: `${n.name} — ${shot.width}×${shot.height}px at ${round(shot.scale, 2)}x`,
+            text: `${n.name} — ${shot.width}×${shot.height}px at ${round(shot.scale, 2)}x${notes.length ? `\n\n${notes.join('\n')}` : ''}`,
           },
         ],
       }
@@ -1136,7 +1148,7 @@ export function createMcpServer(ws: Workspace, projectId: string): McpServer {
         .min(1),
       fileId: fileIdArg,
     },
-    ({ updates, fileId }) => {
+    async ({ updates, fileId }) => {
       const f = resolve(fileId)
       const ops: Op[] = []
 
@@ -1163,7 +1175,13 @@ export function createMcpServer(ws: Workspace, projectId: string): McpServer {
 
       f.transact(ops, 'agent', 'set_component_props')
 
-      return json({ updated: ops.length })
+      const notes = await componentWarnings(
+        f,
+        updates.map((u) => u.nodeId),
+        pageOf(f.doc, updates[0].nodeId)?.id,
+      )
+
+      return json({ updated: ops.length, notes: notes.length ? notes : undefined })
     },
   )
 
@@ -1615,7 +1633,14 @@ HTML/CSS rules:
           f.doc.nodes[id].type !== 'Text',
       )
 
-      const notes = [...warnings, ...(await overflowWarnings(f, [...touched]))]
+      const notes = [
+        ...warnings,
+        ...(await overflowWarnings(f, [...touched])),
+        ...(await componentWarnings(
+          f,
+          subtrees.map((sub) => sub[0].id),
+        )),
+      ]
 
       if (zero.length)
         notes.push(
