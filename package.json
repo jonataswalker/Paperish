@@ -56,6 +56,8 @@
   "productName": "Paperish",
   "description": "A design canvas where every design is real HTML/CSS, and agents design alongside you over MCP.",
   "author": "Jonatas Walker",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/ojowwalker77/Paperish",
   "build": {
     "appId": "design.paperish.app",
     "productName": "Paperish",
@@ -69,7 +71,9 @@
       "out/**",
       "dist/**",
       "src/server/import/extract.js",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "NOTICE"
     ],
     "mac": {
       "category": "public.app-category.graphics-design",
@@ -92,6 +96,25 @@
     "dmg": {
       "title": "Paperish",
       "format": "ULFO"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Graphics",
+      "executableName": "paperish",
+      "maintainer": "Jonatas Walker <125382352+ojowwalker77@users.noreply.github.com>"
     },
     "publish": [
       {

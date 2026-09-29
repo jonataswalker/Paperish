@@ -287,6 +287,7 @@ export class OpenFile {
     }
 
     if (prevName !== this.doc.name) this.ws.filesChanged(this.projectId)
+    else this.ws.broadcastProjects()
   }
 }
 
@@ -366,16 +367,23 @@ export class Workspace {
       if (f?.projectId !== projectId) continue
       void this.filesMsg(f).then((m) => c.ws.readyState === 1 && c.ws.send(JSON.stringify(m)))
     }
+
+    this.broadcastProjects()
   }
 
   broadcastProjects() {
+    const home = [...this.clients].filter(
+      (c) => c.role === 'editor' && !c.fileId && c.ws.readyState === 1,
+    )
+
+    if (!home.length) return
+
     const data = JSON.stringify({
       t: 'projects',
       projects: this.projectInfos(),
     } satisfies ServerMsg)
 
-    for (const c of this.clients)
-      if (c.role === 'editor' && !c.fileId && c.ws.readyState === 1) c.ws.send(data)
+    for (const c of home) c.ws.send(data)
   }
 
   /** An agent changed a file: remember the checkout (the editor opens there next), and tell editors looking at another one. */

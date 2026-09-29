@@ -16,6 +16,14 @@ let origin = ''
 /** Editor windows, as opposed to the engine's hidden ones. */
 const editors = new Set<BrowserWindow>()
 
+const mac = process.platform === 'darwin'
+
+/** Matches --frame and --text, so the window's own chrome sits in the app's title bar. */
+const frame = () =>
+  nativeTheme.shouldUseDarkColors
+    ? { color: '#141414', symbolColor: '#ededed', height: 44 }
+    : { color: '#eaeaea', symbolColor: '#141414', height: 44 }
+
 function openEditor(url = `${origin}/`) {
   const win = new BrowserWindow({
     width: 1440,
@@ -24,11 +32,10 @@ function openEditor(url = `${origin}/`) {
     minHeight: 480,
     show: false,
     title: 'Paperish',
-    // The app draws its own 44px title bar; the traffic lights sit centred in it.
+    // The app draws its own 44px title bar; the traffic lights (or window controls) sit in it.
     titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 16, y: 15 },
-    // Matches --frame, so a new window doesn't flash the other theme.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#141414' : '#eaeaea',
+    ...(mac ? { trafficLightPosition: { x: 16, y: 15 } } : { titleBarOverlay: frame() }),
+    backgroundColor: frame().color,
     webPreferences: { sandbox: true, contextIsolation: true },
   })
 
@@ -36,7 +43,7 @@ function openEditor(url = `${origin}/`) {
   win.on('closed', () => {
     editors.delete(win)
 
-    if (process.platform !== 'darwin' && !editors.size) app.quit()
+    if (!mac && !editors.size) app.quit()
   })
   win.once('ready-to-show', () => win.show())
   // Our own URLs (e.g. an artboard preview) open as app windows; anything else in the browser.
@@ -71,6 +78,10 @@ app.on('activate', () => {
 })
 
 app.on('window-all-closed', () => {})
+
+nativeTheme.on('updated', () => {
+  if (!mac) for (const win of editors) win.setTitleBarOverlay(frame())
+})
 
 let quitting = false
 

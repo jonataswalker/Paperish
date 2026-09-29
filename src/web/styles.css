@@ -205,6 +205,10 @@ html.engine body {
 .app-mac .pw-topbar {
   padding-left: 78px;
 }
+.app-other .pw-topbar {
+  padding-left: calc(env(titlebar-area-x, 0px) + 8px);
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 8px);
+}
 .pw-home-bar {
   display: flex;
 }
