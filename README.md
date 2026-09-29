@@ -129,7 +129,7 @@ For agents, `compare_revision` summarizes what changed since a revision ("HEAD",
 
 ## MCP tools
 
-Names and argument shapes match Paper's MCP (captured in `reference/paper-tools.json`), so prompts and skills written for Paper work unchanged. Descriptions and the agent guide (`get_guide`) are our own.
+Names and argument shapes match Paper's MCP, so prompts and skills written for Paper work unchanged. Descriptions and the agent guide (`get_guide`) are our own.
 
 | Area | Tools |
 | --- | --- |
