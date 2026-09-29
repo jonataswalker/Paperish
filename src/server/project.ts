@@ -9,6 +9,7 @@ import type {
   ProjectState,
 } from '../shared/types'
 import { startHost, type HostHandle } from './component-host'
+import { nuxtAliases, nuxtConfigFile, nuxtCss } from './nuxt'
 
 // Linked codebases: detect frameworks and Tailwind, discover components and
 // their props, and run a component host (a Vite dev server inside the project)
@@ -188,7 +189,7 @@ function analyze(root: string): Omit<ProjectState, 'status' | 'hostOrigin' | 'er
 
   if (deps.react) frameworks.push('react')
 
-  if (deps.vue) frameworks.push('vue')
+  if (deps.vue || deps.nuxt) frameworks.push('vue')
 
   // SAFETY: tailwindcss package.json carries a version string when installed.
   const installedTw = readJson(path.join(root, 'node_modules/tailwindcss/package.json'))
@@ -269,7 +270,13 @@ function analyze(root: string): Omit<ProjectState, 'status' | 'hostOrigin' | 'er
     frameworks,
     tailwind,
     cssEntries,
-    globalCss: globalStylesheets(root, aliases),
+    globalCss: [
+      // @nuxtjs/tailwindcss injects Tailwind's own stylesheet when the app has none.
+      ...(deps['@nuxtjs/tailwindcss'] && tailwind?.startsWith('3') && !cssEntries.length
+        ? ['tailwindcss/tailwind.css']
+        : []),
+      ...globalStylesheets(root, aliases),
+    ],
     components: components.toSorted((a, b) => a.name.localeCompare(b.name)),
   }
 }
@@ -313,7 +320,7 @@ function globalStylesheets(root: string, aliases: Record<string, string>): strin
   for (const m of html.matchAll(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"'?]+)["']/g))
     entries.push(m[1].replace(/^\.?\//, ''))
   entries.push(...ENTRY_FILES)
-  const out: string[] = []
+  const out: string[] = nuxtConfigFile(root) ? nuxtCss(root) : []
 
   for (const entry of new Set(entries)) {
     const src = readSmall(path.join(root, entry))
@@ -423,6 +430,7 @@ function stripJsonComments(s: string): string {
 
 /** tsconfig/jsconfig `paths`: alias prefix -> project-relative directory. */
 export function readAliases(root: string) {
+  if (nuxtConfigFile(root)) return nuxtAliases(root)
   const out: Record<string, string> = {}
 
   for (const name of ['tsconfig.json', 'tsconfig.app.json', 'jsconfig.json']) {

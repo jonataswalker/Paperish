@@ -46,6 +46,7 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [issues, setIssues] = useState<string[]>([])
   const iid = useMemo(() => Math.random().toString(36).slice(2), [])
   const origin = project?.status === 'ready' ? project.hostOrigin : undefined
   const fill = hasExplicitWidth(n.styles)
@@ -77,8 +78,15 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
       const win = frame.current?.contentWindow
 
       if (!win || e.source !== win || !e.data?.__paperish) return
+
       // SAFETY: checked e.source is our iframe and __paperish flag; host only sends pw:* render messages.
-      const d = e.data as { type: string; w?: number; h?: number; message?: string }
+      const d = e.data as {
+        type: string
+        w?: number
+        h?: number
+        message?: string
+        issues?: string[]
+      }
 
       if (d.type === 'pw:ready') {
         ready.current = true
@@ -87,6 +95,7 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
       else if (d.type === 'pw:rendered') {
         setState('ready')
         setError(null)
+        setIssues(d.issues ?? [])
       } else if (d.type === 'pw:error') {
         setState('error')
         setError(d.message ?? 'Render error')
@@ -120,6 +129,7 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
       <div
         data-pid={n.id}
         data-component-state={project?.status === 'starting' ? 'loading' : 'error'}
+        data-component-error={project?.status === 'starting' ? undefined : label}
         className="pw-comp-placeholder"
         style={wrapper}
         title={label}
@@ -131,7 +141,13 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
   }
 
   return (
-    <div data-pid={n.id} data-component-state={state} style={wrapper}>
+    <div
+      data-pid={n.id}
+      data-component-state={state}
+      data-component-error={state === 'error' ? (error ?? '') : undefined}
+      data-component-issues={state === 'ready' && issues.length ? issues.join('\n') : undefined}
+      style={wrapper}
+    >
       <iframe
         ref={frame}
         src={`${origin}/__paperish/host.html?iid=${iid}`}
@@ -151,6 +167,11 @@ export function ComponentView({ n, style }: { n: PNode; style: CSSProperties }) 
       {state === 'error' && (
         <div className="pw-comp-error" title={error ?? ''}>
           {n.component?.name}: {error}
+        </div>
+      )}
+      {state === 'ready' && issues.length > 0 && (
+        <div className="pw-comp-error pw-comp-issue" title={issues.join('\n')}>
+          {n.component?.name}: {issues[0]}
         </div>
       )}
     </div>

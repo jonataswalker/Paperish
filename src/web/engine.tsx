@@ -1056,6 +1056,35 @@ function audit({ ids }: { ids: string[] }) {
   return out
 }
 
+/** How each real component under the given nodes rendered, when it didn't render cleanly. */
+function components({ ids }: { ids: string[] }) {
+  const nodes = store.doc!.nodes
+  const out: Record<string, string> = {}
+
+  const walk = (id: string) => {
+    const n = nodes[id]
+
+    if (!n || n.hidden) return
+
+    if (n.type === 'Component') {
+      const d = el(id)?.dataset
+
+      const problem =
+        d?.componentState === 'loading'
+          ? 'still loading after 15s'
+          : (d?.componentError ?? d?.componentIssues?.replace(/\n/g, '; '))
+
+      if (problem !== undefined) out[id] = problem || 'render error'
+    }
+
+    for (const c of n.children) walk(c)
+  }
+
+  for (const id of ids) walk(id)
+
+  return out
+}
+
 const METHODS: EngineMethodMap = {
   layout,
   computed,
@@ -1065,6 +1094,7 @@ const METHODS: EngineMethodMap = {
   downscale,
   diff,
   audit,
+  components,
   settle: () => true,
 }
 

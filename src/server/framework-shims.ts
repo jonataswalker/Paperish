@@ -1,10 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import { nuxtPlugins, nuxtSrcDir } from './nuxt'
 
-// Projects without a Vite config (Next.js, Create React App…) import things
-// Vite can't run in a browser. These plugins stand in for them: next/* modules
-// become small browser versions, JSX in .js files compiles, and the public env
-// variables those toolchains inline are defined.
+// Projects without a Vite config (Next.js, Create React App, Nuxt…) import
+// things Vite can't run in a browser. These plugins stand in for them: next/*
+// modules become small browser versions, Nuxt's auto-imports resolve, JSX in .js
+// files compiles, Tailwind compiles when the framework set it up, and the public
+// env variables those toolchains inline are defined.
 
 type ViteModule = typeof import('vite')
 
@@ -26,16 +30,97 @@ interface LegacyVite {
   ): Promise<{ code: string; map: unknown }>
 }
 
-export function frameworkShims(vite: ViteModule, root: string) {
+export async function frameworkShims(vite: ViteModule, root: string, tailwind: string | null) {
   const deps = readDeps(root)
   const plugins: unknown[] = []
+  let postcss: { plugins: PostcssPlugin[] } | undefined
 
   if (deps.next) plugins.push(nextPlugin())
 
+  if (deps.nuxt) plugins.push(...(await nuxtPlugins(root)))
+
   if (deps['react-scripts'] || deps.next) plugins.push(jsxInJsPlugin(vite, root))
 
-  return { plugins, define: envDefines(vite, root) }
+  // Nuxt configures Tailwind in nuxt.config, which Vite never reads.
+  if (tailwind && !hasPostcssConfig(root)) {
+    if (tailwind.startsWith('4')) plugins.push(await tailwindVite(root))
+    else if (tailwind.startsWith('3')) postcss = { plugins: [tailwindPostcss(root, !!deps.nuxt)] }
+  }
+
+  return { plugins, define: envDefines(vite, root), postcss }
 }
+
+function hasPostcssConfig(root: string): boolean {
+  return fs.readdirSync(root).some((f) => /^(\.postcssrc(\.\w+)?|postcss\.config\.\w+)$/.test(f))
+}
+
+async function tailwindVite(root: string) {
+  let mod: typeof import('@tailwindcss/vite')
+
+  try {
+    const entry = createRequire(path.join(root, 'package.json')).resolve('@tailwindcss/vite')
+    // SAFETY: the resolved @tailwindcss/vite entry default-exports the plugin factory.
+    mod = (await import(pathToFileURL(entry).href)) as typeof mod
+  } catch {
+    mod = await import('@tailwindcss/vite')
+  }
+
+  return mod.default()
+}
+
+/** Tailwind v3's PostCSS plugin with the project's config, scanning the app's sources. */
+function tailwindPostcss(root: string, nuxt: boolean) {
+  const req = createRequire(path.join(root, 'package.json'))
+
+  const file = [
+    'tailwind.config.ts',
+    'tailwind.config.js',
+    'tailwind.config.cjs',
+    'tailwind.config.mjs',
+  ]
+    .map((f) => path.join(root, f))
+    .find((f) => fs.existsSync(f))
+
+  // SAFETY: tailwindcss v3 ships loadConfig(path) returning the resolved config object.
+  const config = file ? (req('tailwindcss/loadConfig') as (f: string) => TailwindConfig)(file) : {}
+  const listed = Array.isArray(config.content) ? config.content : (config.content?.files ?? [])
+
+  const base = nuxt ? nuxtSrcDir(root) : root
+
+  const dirs = [
+    'components',
+    'layouts',
+    'pages',
+    'plugins',
+    'composables',
+    'utils',
+    'src',
+    'app',
+  ].flatMap((d) => (fs.existsSync(path.join(base, d)) ? [path.join(base, d)] : []))
+
+  // Relative globs resolve against the config file, not Paperish's working directory.
+  const content = {
+    relative: true,
+    files: [
+      ...listed,
+      ...dirs.map((d) => `${d}/**/*.{vue,js,jsx,mjs,ts,tsx,html,mdx}`),
+      `${base}/*.{vue,html}`,
+    ],
+  }
+
+  // SAFETY: tailwindcss v3's main export is its PostCSS plugin factory.
+  return (req('tailwindcss') as (c: TailwindConfig) => PostcssPlugin)({ ...config, content })
+}
+
+interface TailwindConfig {
+  content?: TailwindContent[] | { relative?: boolean; files?: TailwindContent[] }
+}
+
+interface PostcssPlugin {
+  postcssPlugin: string
+}
+
+type TailwindContent = string | { raw: string; extension?: string }
 
 function readDeps(root: string): DepMap {
   try {
