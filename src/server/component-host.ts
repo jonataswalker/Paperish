@@ -144,7 +144,14 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
     resolve: alias.length ? { alias } : undefined,
     define,
     css: postcss ? { postcss } : undefined,
-    server: { host: '127.0.0.1', port: HOST_BASE_PORT, strictPort: false, open: false, cors: true },
+    server: {
+      host: '127.0.0.1',
+      port: HOST_BASE_PORT,
+      strictPort: false,
+      open: false,
+      cors: true,
+      hmr: { overlay: false },
+    },
     optimizeDeps: {
       entries: state.components.map((c) => c.file),
       // SAFETY: filter(Boolean) removes the empty client entry used for legacy React.
