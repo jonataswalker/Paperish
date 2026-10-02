@@ -451,9 +451,14 @@ class Store {
     this.emit()
   }
 
-  /** Applied synchronously (listeners write the DOM), so reads right after see it. */
+  /**
+   * Applied synchronously (listeners write the DOM), so reads right after see it.
+   * Offsets snap to device pixels, like native scrolling, so a pan moves the
+   * design's raster instead of redrawing it.
+   */
   setCamera(c: Camera) {
-    this.camera = c
+    const dpr = window.devicePixelRatio
+    this.camera = { zoom: c.zoom, x: Math.round(c.x * dpr) / dpr, y: Math.round(c.y * dpr) / dpr }
 
     for (const l of this.cameraListeners) l()
     this.saveCamera()

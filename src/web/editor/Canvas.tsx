@@ -150,7 +150,7 @@ export function Canvas() {
 
     const apply = () => {
       const c = store.camera
-      cam.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.zoom})`
+      cam.style.transform = `translate3d(${c.x}px, ${c.y}px, 0) scale(${c.zoom})`
       overlay.style.transform = `translate(${c.x}px, ${c.y}px)`
       const zoomed = c.zoom !== lastZoom
       lastZoom = c.zoom

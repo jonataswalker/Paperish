@@ -1671,14 +1671,15 @@ a.pw-path:hover {
   pointer-events: none;
   will-change: transform;
 }
-/* The design lives on its own compositor layer: panning just moves it (no
-   re-raster), and overlay changes never repaint it. */
+/* The design lives on its own compositor layer (the camera's translate3d):
+   panning just moves it, and overlay changes never repaint it. Not
+   will-change, which pins its raster to device scale at any zoom: blurry
+   zoomed in, out of tile memory zoomed out. */
 .pw-camera {
   position: absolute;
   left: 0;
   top: 0;
   transform-origin: 0 0;
-  will-change: transform;
 }
 .pw-world {
   position: absolute;

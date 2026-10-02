@@ -1,6 +1,6 @@
-import type { CSSProperties, Ref } from 'react'
-import { shallow, useStore } from '../store'
-import type { Box } from './actions'
+import { memo, useMemo, type CSSProperties, type Ref } from 'react'
+import { shallow, store, useCamera, useStore } from '../store'
+import { viewportSize, type Box } from './actions'
 import { CommentPins } from './Comments'
 import { useWorldRects } from './measure'
 
@@ -20,21 +20,8 @@ export function Overlay({
   panRef: Ref<HTMLDivElement>
 }) {
   const selection = useStore((s) => s.selection)
-  const hover = useStore((s) => s.hover)
-  const working = useStore((s) => s.working)
   const editing = useStore((s) => s.editingText)
-
-  const rootChildren =
-    useStore((s) => (s.page ? s.doc?.nodes[s.page.rootId]?.children : undefined)) ?? []
-
-  // Only what the labels show, so edits deep inside artboards don't re-render this.
-  const labels = useStore((s) => rootChildren.map((id) => s.doc?.nodes[id]), shallow)
-  const agentRecent = useStore((s) => s.lastAgentActivity)
-  const proposal = useStore((s) => s.proposal)
-
-  // Hover churns on every mouse move; measure it separately from the stable set.
-  const rects = useWorldRects(uniq([...rootChildren, ...selection]))
-  const hoverRects = useWorldRects(hover && !selection.includes(hover) ? [hover] : [])
+  const rects = useWorldRects(selection)
 
   const selBounds = (() => {
     const rs = selection.map((id) => rects[id]).filter(Boolean)
@@ -49,49 +36,12 @@ export function Overlay({
   })()
 
   const single = selection.length === 1 ? rects[selection[0]] : null
-  const recentlyActive = Date.now() - agentRecent < 2500
 
   return (
     <div className="pw-overlay">
       <div className="pw-overlay-pan" ref={panRef}>
-        {labels.map((n, i) => {
-          const id = rootChildren[i]
-          const r = rects[id]
-
-          if (!r || !n || n.hidden) return null
-          const isWorking = working.includes(id)
-          const selected = selection.includes(id)
-          const option = proposal?.options.find((o) => o.nodeId === id)
-
-          return (
-            <div key={id}>
-              {isWorking && (
-                <div
-                  className={`pw-ob pw-working ${recentlyActive ? 'active' : ''}`}
-                  style={vars(r)}
-                />
-              )}
-              <div
-                className={`pw-label ${selected ? 'selected' : ''}`}
-                data-label-for={id}
-                style={vars(r)}
-              >
-                {isWorking && (
-                  <span className="pw-agent-chip">
-                    <span className="pw-agent-dot" />
-                    Agent
-                  </span>
-                )}
-                {option && <span className="pw-label-letter">{option.letter}</span>}
-                <span className="pw-label-name">{option ? option.label : n.name}</span>
-              </div>
-            </div>
-          )
-        })}
-
-        {hover && hoverRects[hover] && (
-          <div className="pw-ob pw-hover" style={vars(hoverRects[hover])} />
-        )}
+        <Labels />
+        <Hover />
 
         {selection.map((id) =>
           rects[id] ? (
@@ -118,13 +68,125 @@ export function Overlay({
   )
 }
 
+/**
+ * Labels of the artboards in view and wide enough to show one, so a zoom
+ * restyles a screenful of them, however many artboards the page has. Hover
+ * and selection changes stay off this list.
+ */
+const Labels = memo(function Labels() {
+  const working = useStore((s) => s.working)
+
+  const rootChildren =
+    useStore((s) => (s.page ? s.doc?.nodes[s.page.rootId]?.children : undefined)) ?? []
+
+  // Only what the labels show, so edits deep inside artboards don't re-render this.
+  const labels = useStore((s) => rootChildren.map((id) => s.doc?.nodes[id]), shallow)
+  const agentRecent = useStore((s) => s.lastAgentActivity)
+  const proposal = useStore((s) => s.proposal)
+  const rects = useWorldRects(rootChildren)
+  const view = useView()
+  const recentlyActive = Date.now() - agentRecent < 2500
+
+  return labels.map((n, i) => {
+    const id = rootChildren[i]
+    const r = rects[id]
+
+    const isWorking = working.includes(id)
+
+    if (!r || !n || n.hidden || (!isWorking && !inView(r, view))) return null
+    const option = proposal?.options.find((o) => o.nodeId === id)
+
+    return (
+      <Label
+        key={id}
+        id={id}
+        x={r.x}
+        y={r.y}
+        width={r.width}
+        height={r.height}
+        name={option ? option.label : n.name}
+        letter={option?.letter}
+        working={isWorking}
+        active={recentlyActive}
+      />
+    )
+  })
+})
+
+const Label = memo(function Label({
+  id,
+  name,
+  letter,
+  working,
+  active,
+  ...r
+}: Box & { id: string; name: string; letter?: string; working: boolean; active: boolean }) {
+  const selected = useStore((s) => s.selection.includes(id))
+
+  return (
+    <div>
+      {working && <div className={`pw-ob pw-working ${active ? 'active' : ''}`} style={vars(r)} />}
+      <div className={`pw-label ${selected ? 'selected' : ''}`} data-label-for={id} style={vars(r)}>
+        {working && (
+          <span className="pw-agent-chip">
+            <span className="pw-agent-dot" />
+            Agent
+          </span>
+        )}
+        {letter && <span className="pw-label-letter">{letter}</span>}
+        <span className="pw-label-name">{name}</span>
+      </div>
+    </div>
+  )
+})
+
+/**
+ * The world area on screen plus a 512px margin, recomputed only when the
+ * camera crosses a 256px step or zooms past a quarter octave.
+ */
+function useView() {
+  const step = useCamera(
+    (c) => `${Math.round(Math.log2(c.zoom) * 4)} ${Math.round(c.x / 256)} ${Math.round(c.y / 256)}`,
+  )
+
+  return useMemo(() => {
+    const { x, y, zoom } = store.camera
+    const vp = viewportSize()
+    const m = 512 / zoom
+
+    return {
+      x: -x / zoom - m,
+      y: -y / zoom - m,
+      width: vp.width / zoom + 2 * m,
+      height: vp.height / zoom + 2 * m,
+      zoom,
+    }
+  }, [step])
+}
+
+/** Labels fade out under 28px wide; within a quarter octave of zoom, under 20px never reaches that. */
+function inView(r: Box, view: Box & { zoom: number }) {
+  return (
+    r.width * view.zoom >= 20 &&
+    r.x < view.x + view.width &&
+    r.x + r.width > view.x &&
+    r.y < view.y + view.height &&
+    r.y + r.height > view.y
+  )
+}
+
+function Hover() {
+  const hover = useStore((s) => (s.hover && !s.selection.includes(s.hover) ? s.hover : null))
+  const rects = useWorldRects(hover ? [hover] : [])
+
+  return hover && rects[hover] ? (
+    <div className="pw-ob pw-hover" style={vars(rects[hover])} />
+  ) : null
+}
+
 function vars(r: Box) {
   // SAFETY: custom properties for overlay rects; React passes --* through to CSS.
   return { '--x': r.x, '--y': r.y, '--w': r.width, '--h': r.height } as CSSProperties
-}
-
-function uniq(ids: string[]) {
-  return [...new Set(ids)]
 }
 
 function fmt(v: number) {
