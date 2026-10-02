@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { pathToFileURL } from 'node:url'
 import type { ProjectState } from '../shared/types'
 import { CACHE_DIR } from './config'
+import { css2Spec, googleFonts } from './fonts'
 import { frameworkShims } from './framework-shims'
 import { readAliases } from './project'
 
@@ -121,6 +122,9 @@ export async function startHost(root: string, getState: () => ProjectState): Pro
       s.middlewares.use((req, res, next) => {
         serveHostHtml(req, res, next).catch(next)
       })
+      s.middlewares.use((req, res, next) => {
+        serveFonts(req, res, next).catch(next)
+      })
     },
   }
 
@@ -225,6 +229,43 @@ function projectHead(root: string): string {
   return ''
 }
 
+/** Google Fonts for families a frame uses but has no faces for, as @nuxt/fonts' default provider would. */
+async function serveFonts(req: IncomingMessage, res: ServerResponse, next: () => void) {
+  if (!req.url?.startsWith('/__paperish/fonts.css')) return next()
+  const index = await googleFonts()
+
+  const specs = new URL(req.url, 'http://host').searchParams.getAll('family').flatMap((name) => {
+    const f = index.get(name.toLowerCase())
+
+    return f ? [css2Spec(f)] : []
+  })
+
+  res.setHeader('cache-control', 'no-store')
+
+  if (!specs.length) {
+    res.setHeader('content-type', 'text/css; charset=utf-8')
+
+    return void res.end('')
+  }
+
+  res.statusCode = 302
+  res.setHeader(
+    'location',
+    `https://fonts.googleapis.com/css2?${specs.map((f) => `family=${f}`).join('&')}&display=swap`,
+  )
+  res.end()
+}
+
+function usesNuxtFonts(root: string): boolean {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+
+    return Boolean(pkg.dependencies?.['@nuxt/fonts'] ?? pkg.devDependencies?.['@nuxt/fonts'])
+  } catch {
+    return false
+  }
+}
+
 function hostHtml(root: string): string {
   return `<!doctype html>
 <html>
@@ -290,6 +331,7 @@ function entrySource(root: string, state: ProjectState): string {
     )
 
   if (hasVue) lines.push(RUNTIME_VUE)
+  lines.push(usesNuxtFonts(root) ? RUNTIME_FONTS : 'const loadFonts = async () => {};')
   lines.push(RUNTIME_LISTEN)
 
   return lines.join('\n')
@@ -421,6 +463,35 @@ function renderVue(Comp, props, tree, comps, done) {
 }
 `
 
+const RUNTIME_FONTS = `
+const GENERIC = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'emoji', 'math', 'fangsong']);
+const requested = new Set();
+const familyOf = (stack) => stack.split(',')[0].replace(/['"]/g, '').trim();
+const loadFonts = async () => {
+  const loaded = new Set([...document.fonts].map((f) => familyOf(f.family)));
+  const faces = new Set();
+  const missing = new Set();
+  for (const e of [root, ...root.querySelectorAll('*')]) {
+    const cs = getComputedStyle(e);
+    const fam = familyOf(cs.fontFamily);
+    if (!fam || GENERIC.has(fam.toLowerCase())) continue;
+    faces.add(cs.fontStyle + ' ' + cs.fontWeight + ' 16px "' + fam + '"');
+    if (!loaded.has(fam) && !requested.has(fam)) missing.add(fam);
+  }
+  if (missing.size) {
+    for (const f of missing) requested.add(f);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/__paperish/fonts.css?' + [...missing].map((f) => 'family=' + encodeURIComponent(f)).join('&');
+    await new Promise((r) => { link.onload = link.onerror = r; document.head.append(link); });
+  }
+  await Promise.race([
+    Promise.all([...faces].map((d) => document.fonts.load(d).catch(() => []))),
+    new Promise((r) => setTimeout(r, 5000)),
+  ]);
+};
+`
+
 const RUNTIME_LISTEN = `
 window.addEventListener('message', async (e) => {
   const d = e.data;
@@ -432,7 +503,7 @@ window.addEventListener('message', async (e) => {
     const Comp = await load(d.component);
     const comps = {};
     for (const id of d.refs || []) { try { comps[id] = await load(id); } catch {} }
-    const done = () => requestAnimationFrame(() => { report(); if (!failed) post({ type: 'pw:rendered', issues: check() }); });
+    const done = () => requestAnimationFrame(async () => { await loadFonts(); report(); if (!failed) post({ type: 'pw:rendered', issues: check() }); });
     if (frameworks[d.component] === 'vue') renderVue(Comp, d.props || {}, d.tree || [], comps, done);
     else renderReact(Comp, d.props || {}, d.tree || [], comps, done);
   } catch (err) {
